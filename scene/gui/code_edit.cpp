@@ -1614,12 +1614,14 @@ PackedInt32Array CodeEdit::get_breakpointed_lines() const {
 
 // Bookmarks
 void CodeEdit::set_line_as_bookmarked(int p_line, bool p_bookmarked) {
+	ERR_FAIL_INDEX(p_line, get_line_count());
 	int mask = get_line_gutter_metadata(p_line, main_gutter);
 	set_line_gutter_metadata(p_line, main_gutter, p_bookmarked ? mask | MAIN_GUTTER_BOOKMARK : mask & ~MAIN_GUTTER_BOOKMARK);
 	queue_redraw();
 }
 
 bool CodeEdit::is_line_bookmarked(int p_line) const {
+	ERR_FAIL_INDEX_V(p_line, get_line_count(), false);
 	return (int)get_line_gutter_metadata(p_line, main_gutter) & MAIN_GUTTER_BOOKMARK;
 }
 
@@ -1643,12 +1645,14 @@ PackedInt32Array CodeEdit::get_bookmarked_lines() const {
 
 // Executing lines
 void CodeEdit::set_line_as_executing(int p_line, bool p_executing) {
+	ERR_FAIL_INDEX(p_line, get_line_count());
 	int mask = get_line_gutter_metadata(p_line, main_gutter);
 	set_line_gutter_metadata(p_line, main_gutter, p_executing ? mask | MAIN_GUTTER_EXECUTING : mask & ~MAIN_GUTTER_EXECUTING);
 	queue_redraw();
 }
 
 bool CodeEdit::is_line_executing(int p_line) const {
+	ERR_FAIL_INDEX_V(p_line, get_line_count(), false);
 	return (int)get_line_gutter_metadata(p_line, main_gutter) & MAIN_GUTTER_EXECUTING;
 }
 

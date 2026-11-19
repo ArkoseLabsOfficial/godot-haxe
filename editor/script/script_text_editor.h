@@ -153,6 +153,7 @@ class ScriptTextEditor : public CodeEditorBase {
 	LocalVector<DraggedExport> pending_dragged_exports;
 	Vector<ObjectID> _get_objects_for_export_assignment() const;
 	String _get_dropped_resource_as_exported_member(const Ref<Resource> &p_resource, const Vector<ObjectID> &p_script_instance_obj_ids);
+	String _get_dropped_resource_as_haxe_member(const Ref<Resource> &p_resource, const Vector<ObjectID> &p_script_instance_obj_ids);
 	void _assign_dragged_export_variables();
 
 	static ScriptEditorBase *create_editor(const Ref<Resource> &p_resource);

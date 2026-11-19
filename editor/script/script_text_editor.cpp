@@ -1161,7 +1161,10 @@ void ScriptTextEditor::_code_complete_script(const String &p_code, List<ScriptLa
 
 void ScriptTextEditor::_breakpoint_toggled(int p_row) {
 	const CodeEdit *ce = code_editor->get_text_editor();
-	bool enabled = p_row < ce->get_line_count() && ce->is_line_breakpointed(p_row);
+	if (p_row < 0 || p_row >= ce->get_line_count()) {
+		return;
+	}
+	bool enabled = ce->is_line_breakpointed(p_row);
 	EditorDebuggerNode::get_singleton()->set_breakpoint(edited_res->get_path(), p_row + 1, enabled);
 }
 
@@ -1509,10 +1512,16 @@ void ScriptTextEditor::_update_connected_methods() {
 				for (int j = 0; j < functions.size(); j++) {
 					String name = functions[j].get_slicec(':', 0);
 					if (name == method) {
+						const int function_line = functions[j].get_slicec(':', 1).to_int() - 1;
+						// A language may report a line that does not exist (or no
+						// line at all); the gutter only accepts real lines.
+						if (function_line < 0 || function_line >= text_edit->get_line_count()) {
+							break;
+						}
 						Dictionary line_meta;
 						line_meta["type"] = "connection";
 						line_meta["method"] = method;
-						line = functions[j].get_slicec(':', 1).to_int() - 1;
+						line = function_line;
 						text_edit->set_line_gutter_metadata(line, connection_gutter, line_meta);
 						text_edit->set_line_gutter_icon(line, connection_gutter, get_parent_control()->get_editor_theme_icon(SNAME("Slot")));
 						text_edit->set_line_gutter_clickable(line, connection_gutter, true);
@@ -1594,6 +1603,9 @@ void ScriptTextEditor::_update_connected_methods() {
 
 		if (!found_base_class.is_empty()) {
 			int line = functions[i].get_slicec(':', 1).to_int() - 1;
+			if (line < 0 || line >= text_edit->get_line_count()) {
+				continue;
+			}
 
 			Dictionary line_meta = text_edit->get_line_gutter_metadata(line, connection_gutter);
 			if (line_meta.is_empty()) {
@@ -1923,6 +1935,9 @@ PackedInt32Array ScriptTextEditor::get_breakpoints() {
 }
 
 void ScriptTextEditor::set_breakpoint(int p_line, bool p_enabled) {
+	if (p_line < 0 || p_line >= code_editor->get_text_editor()->get_line_count()) {
+		return;
+	}
 	code_editor->get_text_editor()->set_line_as_breakpoint(p_line, p_enabled);
 }
 
@@ -1949,6 +1964,42 @@ bool ScriptTextEditor::can_drop_data_fw(const Point2 &p_point, const Variant &p_
 	return false;
 }
 
+/* Drag and drop for Haxe scripts.
+ *
+ * GDScript drops use syntax that does not exist in Haxe (`@onready`,
+ * `@export`, `$Path`, `preload()`). Haxe drops produce the equivalents of this
+ * module: `get_node()` calls, and `@:export` fields that the scene fills in
+ * through the script instance, which is the same hand-off the inspector uses. */
+static bool _is_haxe_resource(const Ref<Resource> &p_resource) {
+	Ref<Script> script = p_resource;
+	if (script.is_null()) {
+		return false;
+	}
+	ScriptLanguage *language = script->get_language();
+	return language != nullptr && language->get_name() == "Haxe";
+}
+
+/* Haxe type for a dropped node: the engine class, or the engine base type of
+ * the script attached to it. A project Haxe class is not used because it would
+ * only compile with the matching import, and dropped code must compile as-is. */
+static String _haxe_type_for_script_or_class(const Ref<Script> &p_script, const String &p_class) {
+	if (p_script.is_valid()) {
+		StringName base_type = p_script->get_instance_base_type();
+		if (!base_type.is_empty() && ClassDB::class_exists(base_type)) {
+			return "godot." + String(base_type);
+		}
+	}
+	return "godot." + p_class;
+}
+
+static String _haxe_node_type(Node *p_node) {
+	return _haxe_type_for_script_or_class(p_node->get_script(), p_node->get_class());
+}
+
+static String _haxe_resource_type(const Ref<Resource> &p_resource) {
+	return _haxe_type_for_script_or_class(p_resource->get_script(), p_resource->get_class());
+}
+
 void ScriptTextEditor::_set_drop_info_text(const Dictionary &p_info) const {
 	if (drag_info_label->is_visible() || !EDITOR_GET("text_editor/appearance/drag_and_drop_info/show_drag_and_drop_info")) {
 		return;
@@ -1959,20 +2010,33 @@ void ScriptTextEditor::_set_drop_info_text(const Dictionary &p_info) const {
 	bool drop_as_uid = bool(EDITOR_GET("text_editor/behavior/files/drop_preload_resources_as_uid"));
 	String default_drop_option = drop_as_uid ? TTR("UID path") : TTR("file path");
 	String alternate_drop_option = drop_as_uid ? TTR("file path") : TTR("UID path");
+	const bool haxe = _is_haxe_resource(edited_res);
 
 	const String type = p_info.get("type", "");
 
 	if (type == "files" || type == "files_and_dirs" || type == "resource") {
 		Array files = p_info.get("files", Array());
-		text = TTRN("Drop file path.", "Drop file paths.", files.size()) +
-				"\n" + vformat(TTRN("Hold %s: Add const preload by %s.", "Hold %s: Add const preloads by %s.", files.size()), c, default_drop_option) +
-				"\n" + vformat(TTRN("Hold %s+Shift: Add const preload by %s.", "Hold %s+Shift: Add const preloads by %s.", files.size()), c, alternate_drop_option) +
-				"\n" + TTRN("Hold Alt: Add @export var pointing to the resource.", "Hold Alt: Add @export vars pointing to the resources.", files.size());
+		if (haxe) {
+			// Haxe has no `preload()`; a dropped resource becomes an exported
+			// member, which the scene assigns like the inspector does.
+			text = TTRN("Drop path string.", "Drop path strings.", files.size()) +
+					"\n" + TTRN("Hold Ctrl or Alt: Add an @:export var for the resource.", "Hold Ctrl or Alt: Add @:export vars for the resources.", files.size());
+		} else {
+			text = TTRN("Drop file path.", "Drop file paths.", files.size()) +
+					"\n" + vformat(TTRN("Hold %s: Add const preload by %s.", "Hold %s: Add const preloads by %s.", files.size()), c, default_drop_option) +
+					"\n" + vformat(TTRN("Hold %s+Shift: Add const preload by %s.", "Hold %s+Shift: Add const preloads by %s.", files.size()), c, alternate_drop_option) +
+					"\n" + TTRN("Hold Alt: Add @export var pointing to the resource.", "Hold Alt: Add @export vars pointing to the resources.", files.size());
+		}
 	} else if (type == "nodes") {
 		Array nodes = p_info["nodes"];
-		text = TTRN("Drop node path.", "Drop node paths.", nodes.size()) +
-				"\n" + vformat(TTRN("Hold %s: Add @onready var pointing to the node path.", "Hold %s: Add @onready vars pointing to the node paths.", nodes.size()), c) +
-				"\n" + TTRN("Hold Alt: Add @export var pointing to the node.", "Hold Alt: Add @export vars pointing to the nodes.", nodes.size());
+		if (haxe) {
+			text = TTRN("Drop get_node() call.", "Drop get_node() calls.", nodes.size()) +
+					"\n" + TTRN("Hold Ctrl or Alt: Add an @:export var assigned from the scene.", "Hold Ctrl or Alt: Add @:export vars assigned from the scene.", nodes.size());
+		} else {
+			text = TTRN("Drop node path.", "Drop node paths.", nodes.size()) +
+					"\n" + vformat(TTRN("Hold %s: Add @onready var pointing to the node path.", "Hold %s: Add @onready vars pointing to the node paths.", nodes.size()), c) +
+					"\n" + TTRN("Hold Alt: Add @export var pointing to the node.", "Hold Alt: Add @export vars pointing to the nodes.", nodes.size());
+		}
 	} else if (type == "obj_property") {
 		text = TTR("Drop property path.");
 	}
@@ -2068,6 +2132,21 @@ String ScriptTextEditor::_get_dropped_resource_as_exported_member(const Ref<Reso
 	return vformat("@export var %s: %s", variable_name, class_name);
 }
 
+String ScriptTextEditor::_get_dropped_resource_as_haxe_member(const Ref<Resource> &p_resource, const Vector<ObjectID> &p_script_instance_obj_ids) {
+	String variable_name = p_resource->get_name();
+	if (variable_name.is_empty()) {
+		variable_name = p_resource->get_path().get_file().get_basename();
+	}
+	variable_name = variable_name.to_snake_case().validate_unicode_identifier();
+	String type_name = _haxe_resource_type(p_resource);
+
+	for (ObjectID obj_id : p_script_instance_obj_ids) {
+		pending_dragged_exports.push_back(DraggedExport{ obj_id, variable_name, p_resource, type_name });
+	}
+
+	return vformat("@:export var %s:%s;", variable_name, type_name);
+}
+
 void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from) {
 	Dictionary d = p_data;
 
@@ -2101,6 +2180,7 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 	bool add_new_line = false;
 
 	const String type = d.get("type", "");
+	const bool haxe = _is_haxe_resource(edited_res);
 	if (type == "resource") {
 		Ref<Resource> resource = d["resource"];
 		if (resource.is_null()) {
@@ -2114,7 +2194,14 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 			return;
 		}
 
-		if (member_drop_modifier_pressed) {
+		if (haxe) {
+			if (member_drop_modifier_pressed || export_drop_modifier_pressed) {
+				Vector<ObjectID> obj_ids = _get_objects_for_export_assignment();
+				text_to_drop = _get_dropped_resource_as_haxe_member(resource, obj_ids);
+			} else {
+				text_to_drop = _quote_drop_data(path);
+			}
+		} else if (member_drop_modifier_pressed) {
 			if (resource->is_built_in()) {
 				String warning = TTR("Preloading internal resources is not supported.");
 				EditorToaster::get_singleton()->popup_str(warning, EditorToaster::SEVERITY_ERROR);
@@ -2147,7 +2234,10 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 					resource->set_path_cache(path);
 				}
 
-				if (member_drop_modifier_pressed) {
+				if (haxe) {
+					Vector<ObjectID> obj_ids = _get_objects_for_export_assignment();
+					parts.append(_get_dropped_resource_as_haxe_member(resource, obj_ids));
+				} else if (member_drop_modifier_pressed) {
 					parts.append(_get_dropped_resource_as_member(resource, is_empty_line, allow_uid));
 				} else if (export_drop_modifier_pressed) {
 					Vector<ObjectID> obj_ids = _get_objects_for_export_assignment();
@@ -2166,7 +2256,9 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 				join_string = "\n" + String("\t").repeat(indent_level / te->get_tab_size());
 			}
 		} else {
-			join_string = ", ";
+			// Dropped Haxe members already end with `;`, so they are separated
+			// by a space instead of the GDScript `, `.
+			join_string = haxe ? String(" ") : String(", ");
 		}
 		text_to_drop = join_string.join(parts);
 		if (is_empty_line) {
@@ -2193,7 +2285,54 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 
 		Array nodes = d["nodes"];
 
-		if (member_drop_modifier_pressed) {
+		if (haxe) {
+			if (member_drop_modifier_pressed || export_drop_modifier_pressed) {
+				// An exported field is the Haxe equivalent of `@onready`: the
+				// engine assigns it from the saved scene, so it is available
+				// before `_ready` runs.
+				Vector<ObjectID> obj_ids = _get_objects_for_export_assignment();
+				add_new_line = !is_empty_line && drop_at_column != 0;
+
+				for (int i = 0; i < nodes.size(); i++) {
+					NodePath np = nodes[i];
+					Node *node = get_node(np);
+					if (!node) {
+						continue;
+					}
+
+					String variable_name = String(node->get_name()).to_snake_case().validate_unicode_identifier();
+					String type_name = _haxe_node_type(node);
+					text_to_drop += vformat("@:export var %s:%s;", variable_name, type_name);
+					if (i < nodes.size() - 1) {
+						text_to_drop += "\n";
+					}
+
+					for (ObjectID obj_id : obj_ids) {
+						pending_dragged_exports.push_back(DraggedExport{ obj_id, variable_name, node, type_name });
+					}
+				}
+
+				if (is_empty_line || drop_at_column == 0) {
+					text_to_drop += "\n";
+				}
+			} else {
+				for (int i = 0; i < nodes.size(); i++) {
+					if (i > 0) {
+						text_to_drop += ", ";
+					}
+
+					NodePath np = nodes[i];
+					Node *node = get_node(np);
+					if (!node) {
+						continue;
+					}
+
+					bool is_unique = node->is_unique_name_in_owner() && (node->get_owner() == sn || node->get_owner() == sn->get_owner());
+					String path = is_unique ? "%" + String(node->get_name()) : String(sn->get_path_to(node));
+					text_to_drop += vformat("get_node(%s)", _quote_drop_data(path));
+				}
+			}
+		} else if (member_drop_modifier_pressed) {
 			const bool use_type = EDITOR_GET("text_editor/completion/add_type_hints");
 			add_new_line = !is_empty_line && drop_at_column != 0;
 
@@ -2284,7 +2423,8 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 	}
 
 	if (type == "obj_property") {
-		bool add_literal = EDITOR_GET("text_editor/completion/add_node_path_literals");
+		// `^"path"` is GDScript's NodePath literal; Haxe uses a plain string.
+		bool add_literal = !haxe && EDITOR_GET("text_editor/completion/add_node_path_literals");
 		text_to_drop = add_literal ? "^" : "";
 		// It is unclear whether properties may contain single or double quotes.
 		// Assume here that double-quotes may not exist. We are escaping single-quotes if necessary.
@@ -2398,7 +2538,13 @@ void ScriptTextEditor::_assign_dragged_export_variables() {
 			List<PropertyInfo> properties;
 			si->get_property_list(&properties);
 			for (const PropertyInfo &pi : properties) {
-				if (pi.name == dragged_export.variable_name && pi.hint_string == dragged_export.class_name) {
+				// GDScript keeps the dropped class in `hint_string`, Haxe in
+				// `class_name`. A member that declares neither accepts the
+				// value by name, which is what an untyped export does.
+				const bool same_type = pi.hint_string == dragged_export.class_name ||
+						pi.class_name == dragged_export.class_name ||
+						(pi.class_name.is_empty() && pi.hint_string.is_empty());
+				if (pi.name == dragged_export.variable_name && same_type) {
 					success = si->set(dragged_export.variable_name, dragged_export.value);
 					break;
 				}

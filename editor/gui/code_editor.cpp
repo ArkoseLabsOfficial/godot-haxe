@@ -1425,6 +1425,11 @@ void CodeTextEditor::goto_line_centered(int p_line, int p_column) {
 }
 
 void CodeTextEditor::set_executing_line(int p_line) {
+	if (p_line < 0 || p_line >= text_editor->get_line_count()) {
+		// There is no line to mark; make sure no stale marker is left behind.
+		text_editor->clear_executing_lines();
+		return;
+	}
 	text_editor->set_line_as_executing(p_line, true);
 }
 
@@ -1506,7 +1511,7 @@ void CodeTextEditor::set_edit_state(const Variant &p_state) {
 	if (state.has("breakpoints")) {
 		const PackedInt32Array breakpoints = state["breakpoints"];
 		for (const int &line : breakpoints) {
-			if (line < text_editor->get_line_count()) {
+			if (line >= 0 && line < text_editor->get_line_count()) {
 				text_editor->set_line_as_breakpoint(line, true);
 			}
 		}
@@ -1515,7 +1520,7 @@ void CodeTextEditor::set_edit_state(const Variant &p_state) {
 	if (state.has("bookmarks")) {
 		const PackedInt32Array bookmarks = state["bookmarks"];
 		for (const int &line : bookmarks) {
-			if (line < text_editor->get_line_count()) {
+			if (line >= 0 && line < text_editor->get_line_count()) {
 				text_editor->set_line_as_bookmarked(line, true);
 			}
 		}
@@ -1826,8 +1831,9 @@ void CodeTextEditor::toggle_bookmark() {
 
 		// Set bookmark on caret or remove all bookmarks from the selection.
 		if (!selection_has_bookmarks) {
-			if (text_editor->get_caret_line(c) != last_line) {
-				text_editor->set_line_as_bookmarked(text_editor->get_caret_line(c), true);
+			const int caret_line = text_editor->get_caret_line(c);
+			if (caret_line >= 0 && caret_line != last_line) {
+				text_editor->set_line_as_bookmarked(caret_line, true);
 			}
 		} else {
 			for (int line = from; line <= to; line++) {

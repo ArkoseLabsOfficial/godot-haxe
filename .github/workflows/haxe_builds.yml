@@ -1,0 +1,585 @@
+name: 🦊 Haxe Builds
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# Global Settings
+env:
+  SCONS_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+  # The Haxe toolchain the module is developed and verified against. `haxe`
+  # compiles the project, `hxcpp` is the code generator behind the `cpp`
+  # target; both live in the machine wide haxelib repository, which the module
+  # treats as a shared toolchain rather than a project dependency.
+  HAXE_VERSION: 4.3.7
+  # Emscripten version verified with this module. 4.0.0 breaks WebAssembly
+  # dynamic linking (the Haxe game library is a side module) and 4.0.23 breaks
+  # the threaded dlink template.
+  EMSDK_VERSION: 4.0.11
+  # Contents of the .tpz version.txt, which is also the directory name the
+  # editor installs the templates into.
+  TEMPLATES_VERSION: 4.7.2.stable
+
+jobs:
+  # Builds the editor, which is both what the unit tests run in and the binary
+  # the end-to-end export jobs use.
+  editor-tests:
+    runs-on: ubuntu-24.04
+    name: 🧪 Editor and Haxe tests
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore Godot build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: haxe-editor-tests
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Compilation
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} dev_build=yes tests=yes
+          platform: linuxbsd
+          target: editor
+
+      - name: Save Godot build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: haxe-editor-tests
+        continue-on-error: true
+
+      # A stock editor has no Haxe module: the language is only reachable
+      # through the classes and exporters it registers, whose strings are in
+      # the binary. This catches a module that silently failed to compile in
+      # (for example because `can_build()` returned false).
+      - name: Verify the Haxe module is part of the editor
+        run: |
+          count=$(grep -ac HaxeScript bin/godot.linuxbsd.editor.dev.x86_64 || true)
+          echo "HaxeScript markers in the editor: $count"
+          test "$count" -ge 1
+
+      - name: Run the Haxe tests
+        run: |
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --test --test-case="*Haxe*" 2>&1 | tee haxe-tests.log
+
+      - name: Upload the editor
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-editor
+          path: bin/godot.linuxbsd.editor.dev.x86_64
+
+  # Export templates from this tree, for every platform the module claims to
+  # support. The template files are what carries the language into an exported
+  # game, so a template without the module cannot run a Haxe project.
+  templates:
+    runs-on: ubuntu-24.04
+    name: ${{ matrix.name }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 🐧 Template debug
+            cache-name: haxe-linux-template-debug
+            platform: linuxbsd
+            target: template_debug
+            scons-flags: ""
+            artifact: bin/godot.linuxbsd.template_debug.x86_64
+
+          - name: 🐧 Template release
+            cache-name: haxe-linux-template-release
+            platform: linuxbsd
+            target: template_release
+            scons-flags: ""
+            artifact: bin/godot.linuxbsd.template_release.x86_64
+
+          - name: 🌐 Template debug (dlink)
+            cache-name: haxe-web-template-debug
+            platform: web
+            target: template_debug
+            scons-flags: dlink_enabled=yes
+            artifact: bin/godot.web.template_debug.wasm32.dlink.zip
+
+          - name: 🌐 Template debug (dlink, no threads)
+            cache-name: haxe-web-template-debug-nothreads
+            platform: web
+            target: template_debug
+            scons-flags: dlink_enabled=yes threads=no
+            artifact: bin/godot.web.template_debug.wasm32.nothreads.dlink.zip
+
+          - name: 🌐 Template release (dlink)
+            cache-name: haxe-web-template-release
+            platform: web
+            target: template_release
+            scons-flags: dlink_enabled=yes
+            artifact: bin/godot.web.template_release.wasm32.dlink.zip
+
+          - name: 🌐 Template release (dlink, no threads)
+            cache-name: haxe-web-template-release-nothreads
+            platform: web
+            target: template_release
+            scons-flags: dlink_enabled=yes threads=no
+            artifact: bin/godot.web.template_release.wasm32.nothreads.dlink.zip
+
+          # The module compiles for Windows and its Windows-only code paths
+          # (LoadLibraryW, batch-file tool wrappers, directory junctions) are
+          # cross-built here with MinGW. `d3d12=no` keeps the build free of the
+          # Microsoft D3D12 SDK; the templates still have Vulkan and OpenGL.
+          - name: 🪟 Template debug (MinGW)
+            cache-name: haxe-windows-template-debug
+            platform: windows
+            target: template_debug
+            scons-flags: arch=x86_64 use_mingw=yes d3d12=no
+            artifact: bin/godot.windows.template_debug.x86_64.exe
+
+          - name: 🪟 Template release (MinGW)
+            cache-name: haxe-windows-template-release
+            platform: windows
+            target: template_release
+            scons-flags: arch=x86_64 use_mingw=yes d3d12=no
+            artifact: bin/godot.windows.template_release.x86_64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore Godot build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: ${{ matrix.cache-name }}
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Install the MinGW cross toolchain
+        if: matrix.platform == 'windows'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mingw-w64
+
+      - name: Setup Emscripten
+        if: matrix.platform == 'web'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Compilation
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} ${{ matrix.scons-flags }}
+          platform: ${{ matrix.platform }}
+          target: ${{ matrix.target }}
+
+      - name: Save Godot build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: ${{ matrix.cache-name }}
+        continue-on-error: true
+
+      - name: Verify the template carries the Haxe module
+        if: matrix.platform == 'linuxbsd' || matrix.platform == 'windows'
+        run: |
+          count=$(grep -ac HaxeScript "${{ matrix.artifact }}" || true)
+          echo "HaxeScript markers in ${{ matrix.artifact }}: $count"
+          test "$count" -ge 1
+
+      # A dlink template only loads a Haxe game library when it carries the
+      # dynamic linker split (`godot.side.wasm`) the module checks for at
+      # export time.
+      - name: Verify the web template can load Haxe libraries
+        if: matrix.platform == 'web'
+        run: |
+          unzip -l "${{ matrix.artifact }}" | grep -q godot.side.wasm
+
+      - name: Upload the template
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: ${{ matrix.cache-name }}
+          path: ${{ matrix.artifact }}
+
+      # A Windows template ships with a `.console.exe` launcher next to it;
+      # the export templates directory carries it as
+      # `windows_<target>_x86_64_console.exe`.
+      - name: Upload the Windows console wrapper
+        if: matrix.platform == 'windows'
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: ${{ matrix.cache-name }}-console
+          path: bin/godot.windows.${{ matrix.target }}.x86_64.console.exe
+
+  # Android templates are APKs: SCons produces the native libraries and the
+  # Gradle project in `platform/android/java` packages them, so this job runs
+  # both. APKs are what the editor looks up as `android_debug.apk` /
+  # `android_release.apk`.
+  android-templates:
+    runs-on: ubuntu-24.04
+    name: 🤖 Android templates
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore Godot build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: haxe-android-templates
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Compilation (template_debug)
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} arch=arm64
+          platform: android
+          target: template_debug
+
+      # Both targets share `platform/android/java/lib`, which is a Gradle
+      # module per flavor, so the second target is built after the first one
+      # and before Gradle gathers the libraries.
+      - name: Compilation (template_release)
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} arch=arm64
+          platform: android
+          target: template_release
+
+      - name: Save Godot build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: haxe-android-templates
+        continue-on-error: true
+
+      - name: Generate Godot templates
+        run: |
+          cd platform/android/java
+          ./gradlew generateGodotTemplates
+          cd ../../..
+          ls -l bin/
+
+      - name: Verify the APKs carry the Haxe module
+        run: |
+          for apk in bin/android_debug.apk bin/android_release.apk; do
+            test -f "$apk"
+            unzip -p "$apk" 'lib/arm64-v8a/libgodot_android.so' > /tmp/libgodot_android.so
+            count=$(grep -ac HaxeScript /tmp/libgodot_android.so || true)
+            echo "HaxeScript markers in $apk: $count"
+            test "$count" -ge 1
+          done
+
+      - name: Upload the templates
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-android-templates
+          path: |
+            bin/android_debug.apk
+            bin/android_release.apk
+            bin/android_source.zip
+
+  # A single archive with everything the editor installs from
+  # "Editor > Manage Export Templates". Packaging is what makes the templates
+  # usable outside this build, so it is part of CI rather than a manual step.
+  tpz:
+    runs-on: ubuntu-24.04
+    name: 📦 Export templates archive
+    needs: [editor-tests, templates, android-templates]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download the editor
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-editor
+          path: bin
+
+      - name: Download the desktop and web templates
+        uses: actions/download-artifact@v8
+        with:
+          pattern: haxe-*-template*
+          path: bin
+          merge-multiple: true
+
+      - name: Download the Android templates
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-android-templates
+          path: bin
+
+      - name: Package
+        run: |
+          python misc/scripts/make_export_templates_tpz.py \
+            --bin-dir bin \
+            --output Godot_v${TEMPLATES_VERSION}_export_templates.tpz
+          python misc/scripts/make_export_templates_tpz.py \
+            --bin-dir bin \
+            --output Godot_v${TEMPLATES_VERSION}_export_templates.tpz \
+            --list
+
+      - name: Upload the archive
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-export-templates
+          path: Godot_v${{ env.TEMPLATES_VERSION }}_export_templates.tpz
+
+  # Exports a real game from a real project and runs it. This is the only way
+  # to tell "the editor has a Haxe menu entry" apart from "the language works
+  # in an exported build".
+  export-linux:
+    runs-on: ubuntu-24.04
+    name: 🐧 End-to-end Linux export
+    needs: [tpz]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Install hxcpp
+        run: |
+          haxelib setup ~/haxelib
+          haxelib install hxcpp --quiet
+
+      - name: Download the editor
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-editor
+          path: bin
+
+      - name: Download the templates
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-export-templates
+          path: templates
+
+      - name: Install the templates
+        run: |
+          chmod +x bin/godot.linuxbsd.editor.dev.x86_64
+          mkdir -p ~/.local/share/godot/export_templates/${TEMPLATES_VERSION}
+          unzip -q templates/Godot_v${TEMPLATES_VERSION}_export_templates.tpz -d /tmp/tpz
+          cp -r /tmp/tpz/templates/. ~/.local/share/godot/export_templates/${TEMPLATES_VERSION}/
+
+      - name: Create a minimal project
+        run: |
+          mkdir -p /tmp/haxe-e2e/source
+          cat > /tmp/haxe-e2e/project.godot <<'EOF'
+          config_version=5
+
+          [application]
+
+          config/name="haxe-e2e"
+          run/main_scene="res://main.tscn"
+          config/features=PackedStringArray("4.7")
+          EOF
+          cat > /tmp/haxe-e2e/source/Main.hx <<'EOF'
+          package;
+
+          import godot.Node2D;
+          import godot.GD;
+
+          class Main extends Node2D {
+          	@:export var speed:Float = 12.0;
+
+          	/** Runs once when the scene enters the tree. */
+          	override public function _ready():Void {
+          		var start = new godot.Vector2(1.0, 2.0);
+          		position = start;
+          		position.x = 42.0;
+          		GD.print('haxe-e2e position=' + position.x + ' speed=' + speed);
+          	}
+          }
+          EOF
+          cat > /tmp/haxe-e2e/main.tscn <<'EOF'
+          [gd_scene format=3]
+
+          [ext_resource type="Script" path="res://source/Main.hx" id="1_main"]
+
+          [node name="Main" type="Node2D"]
+          script = ExtResource("1_main")
+          EOF
+          cat > /tmp/haxe-e2e/export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Linux"
+          platform="Linux"
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          script_export_mode=2
+
+          [preset.0.options]
+
+          binary_format/embed_pck=true
+          binary_format/architecture="x86_64"
+          EOF
+
+      - name: Export
+        run: |
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-e2e --import
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-e2e --export-release "Linux" /tmp/haxe-e2e/game.x86_64
+          ls -l /tmp/haxe-e2e/game.x86_64
+
+      - name: Run the exported game
+        run: |
+          chmod +x /tmp/haxe-e2e/game.x86_64
+          /tmp/haxe-e2e/game.x86_64 --headless --quit-after 2 2>&1 | tee game.log
+          # The script is the only thing that prints this line, so it also
+          # proves the compiled library was packaged and loaded.
+          grep -q 'haxe-e2e position=42 speed=12' game.log
+
+  # The web build is a WebAssembly side module linked by Emscripten, so this
+  # job checks that a project compiles and that the export contains the module
+  # the page loads. Running the page itself needs a browser, which is the job
+  # of the manual browser checks documented in HAXE_WEB.md.
+  export-web:
+    runs-on: ubuntu-24.04
+    name: 🌐 End-to-end web export
+    needs: [tpz]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Install hxcpp
+        run: |
+          haxelib setup ~/haxelib
+          haxelib install hxcpp --quiet
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Download the editor
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-editor
+          path: bin
+
+      - name: Download the templates
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-export-templates
+          path: templates
+
+      - name: Install the templates
+        run: |
+          chmod +x bin/godot.linuxbsd.editor.dev.x86_64
+          mkdir -p ~/.local/share/godot/export_templates/${TEMPLATES_VERSION}
+          unzip -q templates/Godot_v${TEMPLATES_VERSION}_export_templates.tpz -d /tmp/tpz
+          cp -r /tmp/tpz/templates/. ~/.local/share/godot/export_templates/${TEMPLATES_VERSION}/
+
+      - name: Create a minimal project
+        run: |
+          mkdir -p /tmp/haxe-web-e2e/source
+          cat > /tmp/haxe-web-e2e/project.godot <<'EOF'
+          config_version=5
+
+          [application]
+
+          config/name="haxe-web-e2e"
+          run/main_scene="res://main.tscn"
+          config/features=PackedStringArray("4.7")
+          EOF
+          cat > /tmp/haxe-web-e2e/source/Main.hx <<'EOF'
+          package;
+
+          import godot.Node2D;
+          import godot.GD;
+
+          class Main extends Node2D {
+          	override public function _ready():Void {
+          		GD.print('haxe-web-e2e ready');
+          	}
+          }
+          EOF
+          cat > /tmp/haxe-web-e2e/main.tscn <<'EOF'
+          [gd_scene format=3]
+
+          [ext_resource type="Script" path="res://source/Main.hx" id="1_main"]
+
+          [node name="Main" type="Node2D"]
+          script = ExtResource("1_main")
+          EOF
+          cat > /tmp/haxe-web-e2e/export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Web"
+          platform="Web"
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          script_export_mode=2
+
+          [preset.0.options]
+
+          variant/extensions_support=true
+          variant/thread_support=false
+          html/canvas_resize_policy=2
+          html/focus_canvas_on_start=true
+          HTML/export_icon=false
+          progressive_web_app/enabled=false
+          EOF
+
+      - name: Export
+        run: |
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-web-e2e --import
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-web-e2e --export-release "Web" /tmp/haxe-web-e2e/out/index.html
+          ls -l /tmp/haxe-web-e2e/out
+
+      - name: Verify the exported page loads a Haxe module
+        run: |
+          # The compiled Haxe library is packaged as a WebAssembly module next
+          # to the page; without it the game cannot instantiate a script class.
+          ls /tmp/haxe-web-e2e/out/*.wasm
+          # Every wasm file starts with the magic `\0asm`; a truncated or
+          # text substitute would not.
+          for module in /tmp/haxe-web-e2e/out/*.wasm; do
+            head -c 4 "$module" | od -An -tx1 | grep -q '00 61 73 6d'
+          done
+          test -s /tmp/haxe-web-e2e/out/index.pck

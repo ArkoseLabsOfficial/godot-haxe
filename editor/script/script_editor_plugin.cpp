@@ -212,10 +212,13 @@ void ScriptEditor::_goto_script_line(Ref<RefCounted> p_script, int p_line) {
 void ScriptEditor::_change_execution(Ref<RefCounted> p_script, int p_line, bool p_set) {
 	Ref<Script> scr = Object::cast_to<Script>(*p_script);
 	if (scr.is_valid() && (scr->has_source_code() || scr->get_path().is_resource_file())) {
+		// A negative line means "no execution point", which is the same as
+		// clearing the marker; it must never reach the gutter.
+		const bool set_marker = p_set && p_line >= 0;
 		for (int i = 0; i < tab_container->get_tab_count(); i++) {
 			if (TextEditorBase *teb = Object::cast_to<TextEditorBase>(tab_container->get_tab_control(i))) {
 				if ((scr.is_valid() && teb->get_edited_resource() == p_script) || teb->get_edited_resource()->get_path() == scr->get_path()) {
-					if (p_set) {
+					if (set_marker) {
 						teb->set_executing_line(p_line);
 					} else {
 						teb->clear_executing_line();
@@ -227,6 +230,9 @@ void ScriptEditor::_change_execution(Ref<RefCounted> p_script, int p_line, bool 
 }
 
 void ScriptEditor::_set_breakpoint(Ref<RefCounted> p_script, int p_line, bool p_enabled) {
+	if (p_line < 0) {
+		return;
+	}
 	Ref<Script> scr = Object::cast_to<Script>(*p_script);
 	if (scr.is_valid() && (scr->has_source_code() || scr->get_path().is_resource_file())) {
 		// Update if open.

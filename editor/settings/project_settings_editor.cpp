@@ -38,6 +38,7 @@
 #include "editor/editor_string_names.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/export/editor_export.h"
+#include "editor/gui/editor_toaster.h"
 #include "editor/gui/editor_variant_type_selectors.h"
 #include "editor/inspector/editor_inspector.h"
 #include "editor/settings/editor_settings.h"
@@ -189,6 +190,13 @@ void ProjectSettingsEditor::_add_setting() {
 
 void ProjectSettingsEditor::_delete_setting() {
 	String setting = _get_setting_name();
+	if (ps->is_setting_protected(setting) || ps->is_setting_protected(setting.get_slicec('.', 0))) {
+		// Settings registered by a module are required by it; deleting one
+		// would break that module's workflow until the project is reopened.
+		EditorToaster::get_singleton()->popup_str(vformat(TTR("The setting \"%s\" is required and cannot be removed."), setting), EditorToaster::SEVERITY_WARNING);
+		del_button->release_focus();
+		return;
+	}
 	Variant value = ps->get(setting);
 	int order = ps->get_order(setting);
 
@@ -261,7 +269,8 @@ void ProjectSettingsEditor::_update_property_box() {
 	}
 
 	if (ps->has_setting(setting)) {
-		del_button->set_disabled(ps->is_builtin_setting(setting) || setting.begins_with(ProjectSettings::EDITOR_SETTING_OVERRIDE_PREFIX));
+		bool protected_setting = ps->is_setting_protected(setting) || ps->is_setting_protected(name);
+		del_button->set_disabled(protected_setting || ps->is_builtin_setting(setting) || setting.begins_with(ProjectSettings::EDITOR_SETTING_OVERRIDE_PREFIX));
 		_select_type(ps->get_setting(setting).get_type());
 	} else {
 		if (ps->has_setting(name)) {

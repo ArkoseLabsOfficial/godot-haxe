@@ -109,6 +109,7 @@ protected:
 	HashMap<StringName, LocalVector<Pair<StringName, StringName>>> feature_overrides;
 
 	LocalVector<String> hidden_prefixes;
+	HashSet<StringName> protected_settings;
 	HashMap<StringName, AutoloadInfo> autoloads;
 	HashMap<StringName, String> global_groups;
 	HashMap<StringName, HashSet<StringName>> scene_groups_cache;
@@ -182,6 +183,13 @@ public:
 	void set_ignore_value_in_docs(const String &p_name, bool p_ignore);
 	bool get_ignore_value_in_docs(const String &p_name) const;
 	void add_hidden_prefix(const String &p_prefix);
+
+	/* C++-only registry of settings a module owns and the editor must not
+	 * delete. The Project Settings dialog disables its delete button for
+	 * them, so a project cannot lose the configuration a module needs by
+	 * accident. */
+	void set_setting_protected(const String &p_name, bool p_protected = true);
+	bool is_setting_protected(const String &p_name) const;
 
 	String get_project_data_dir_name() const;
 	String get_project_data_path() const;

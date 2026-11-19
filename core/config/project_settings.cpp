@@ -263,6 +263,18 @@ void ProjectSettings::add_hidden_prefix(const String &p_prefix) {
 	hidden_prefixes.push_back(p_prefix);
 }
 
+void ProjectSettings::set_setting_protected(const String &p_name, bool p_protected) {
+	if (p_protected) {
+		protected_settings.insert(p_name);
+	} else {
+		protected_settings.erase(p_name);
+	}
+}
+
+bool ProjectSettings::is_setting_protected(const String &p_name) const {
+	return protected_settings.has(p_name);
+}
+
 String ProjectSettings::globalize_path(const String &p_path) const {
 	if (p_path.begins_with("res://")) {
 		if (!resource_path.is_empty()) {
