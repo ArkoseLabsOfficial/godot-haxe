@@ -1,0 +1,284 @@
+name: 🍏 Haxe macOS and iOS Builds
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# This workflow is deliberately separate from `haxe_builds.yml`. The Apple
+# runners are the slowest and the most exposed to toolchain churn (Xcode and SDK
+# updates), so a problem there must not be able to fail the Linux, Windows,
+# Android or web Haxe jobs, and vice versa. It has its own trigger and its own
+# conclusions.
+#
+# The two platforms are not symmetric:
+#
+# * macOS is the host on this runner, so `haxe_builds.yml`'s model of
+#   "the game library is compiled by the editor with the host toolchain" holds:
+#   an editor built here exports a real Haxe game and runs it.
+# * iOS is not a host. The module compiles the game library with hxcpp at export
+#   time and the game `dlopen`s it, which iOS forbids for code loaded outside
+#   the app bundle, so the module refuses to export a Haxe project for iOS.
+#   What this workflow can verify is the other half of "games get Haxe support":
+#   the iOS template built from this tree carries the Haxe module, so the
+#   language is present in the engine a game links against.
+env:
+  HAXE_VERSION: 4.3.7
+
+jobs:
+  macos:
+    runs-on: macos-26
+    name: 🍎 macOS editor, template and export
+    timeout-minutes: 240
+    env:
+      SCONS_FLAGS: >-
+        dev_mode=yes
+        module_text_server_fb_enabled=yes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore Godot build cache
+        uses: ./.github/actions/godot-cache-restore
+        with:
+          cache-name: haxe-macos
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download pre-built ANGLE
+        shell: sh
+        id: angle-sdk
+        run: |
+          if python ./misc/scripts/install_angle.py; then
+            echo "ANGLE_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ANGLE SDK installation failed, building without ANGLE support."
+            echo "ANGLE_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download pre-built AccessKit
+        shell: sh
+        id: accesskit-sdk
+        run: |
+          if python3 ./misc/scripts/install_accesskit.py; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Vulkan SDK
+        id: vulkan-sdk
+        run: |
+          if sh misc/scripts/install_vulkan_sdk_macos.sh; then
+            echo "VULKAN_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::macOS: Vulkan SDK installation failed, building without Vulkan support."
+            echo "VULKAN_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+        continue-on-error: true
+
+      # The Haxe toolchain is external to the engine: the module shells out to
+      # `haxe`/`hxcpp` to compile the game library during an export.
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Install hxcpp
+        run: |
+          haxelib setup ~/haxelib
+          haxelib install hxcpp --quiet
+
+      - name: Compilation (editor)
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} tests=yes arch=arm64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED }}
+          platform: macos
+          target: editor
+
+      - name: Save Godot build cache
+        uses: ./.github/actions/godot-cache-save
+        with:
+          cache-name: haxe-macos
+        continue-on-error: true
+
+      - name: Verify the Haxe module is part of the editor
+        run: |
+          count=$(grep -ac HaxeScript bin/godot.macos.editor.arm64 || true)
+          echo "HaxeScript markers in the editor: $count"
+          test "$count" -ge 1
+
+      # The editor runs the same suite as `macos_builds.yml`, which is where the
+      # module's macOS behavior (notably the unix socket code that a TCP server
+      # uses) is exercised.
+      - name: Run the engine and Haxe tests
+        run: |
+          ./bin/godot.macos.editor.arm64 --headless --test --force-colors 2>&1 | tee macos-tests.log
+
+      - name: Compilation (template_release)
+        uses: ./.github/actions/godot-build
+        with:
+          # `generate_bundle=yes` assembles and zips `macos_template.app`, which
+          # is the template an export consumes.
+          scons-flags: module_text_server_fb_enabled=yes arch=arm64 generate_bundle=yes vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED }}
+          platform: macos
+          target: template_release
+
+      - name: Verify the macOS template carries the Haxe module
+        run: |
+          ls -l bin/*.zip
+          rm -rf /tmp/macos-template
+          mkdir -p /tmp/macos-template
+          unzip -q bin/godot_macos.zip -d /tmp/macos-template
+          # A binary built with the module has the `HaxeScript` class name in its
+          # read-only data; an official template does not.
+          if ! grep -raq HaxeScript /tmp/macos-template/macos_template.app/Contents/MacOS; then
+            echo "::error::the macOS template does not contain the Haxe module"
+            exit 1
+          fi
+
+      - name: Create a minimal project
+        run: |
+          mkdir -p /tmp/haxe-macos-e2e/source
+          cat > /tmp/haxe-macos-e2e/project.godot <<'EOF'
+          config_version=5
+
+          [application]
+
+          config/name="haxe_macos_e2e"
+          run/main_scene="res://main.tscn"
+          config/features=PackedStringArray("4.7")
+          EOF
+          cat > /tmp/haxe-macos-e2e/source/Main.hx <<'EOF'
+          package;
+
+          import godot.Node2D;
+          import godot.GD;
+
+          class Main extends Node2D {
+          	@:export var speed:Float = 12.0;
+
+          	override public function _ready():Void {
+          		var start = new godot.Vector2(1.0, 2.0);
+          		position = start;
+          		position.x = 42.0;
+          		GD.print('haxe-macos-e2e position=' + position.x + ' speed=' + speed);
+          	}
+          }
+          EOF
+          cat > /tmp/haxe-macos-e2e/main.tscn <<'EOF'
+          [gd_scene format=3]
+
+          [ext_resource type="Script" path="res://source/Main.hx" id="1_main"]
+
+          [node name="Main" type="Node2D"]
+          script = ExtResource("1_main")
+          EOF
+          cat > /tmp/haxe-macos-e2e/export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="macOS"
+          platform="macOS"
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          script_export_mode=2
+
+          [preset.0.options]
+
+          binary_format/architecture="universal"
+          export/distribution_type=0
+          application/bundle_identifier="com.example.haxee2e"
+          codesign/codesign=1
+          EOF
+          # The module's export plugin refuses a macOS preset without a custom
+          # template, because the stock template has no Haxe module. The package
+          # just built above carries it.
+          cat >> /tmp/haxe-macos-e2e/export_presets.cfg <<EOF
+          custom_template/release="${PWD}/bin/godot_macos.zip"
+          EOF
+
+      - name: Export
+        run: |
+          mkdir -p /tmp/haxe-macos-e2e/export
+          ./bin/godot.macos.editor.arm64 --headless --path /tmp/haxe-macos-e2e --import
+          ./bin/godot.macos.editor.arm64 --headless --path /tmp/haxe-macos-e2e --export-release "macOS" /tmp/haxe-macos-e2e/export/Game.zip
+          ls -l /tmp/haxe-macos-e2e/export
+
+      - name: Run the exported game
+        run: |
+          rm -rf /tmp/haxe-macos-e2e/run
+          mkdir -p /tmp/haxe-macos-e2e/run
+          unzip -q /tmp/haxe-macos-e2e/export/Game.zip -d /tmp/haxe-macos-e2e/run
+          app=$(find /tmp/haxe-macos-e2e/run -maxdepth 1 -name '*.app' | head -n 1)
+          echo "App bundle: $app"
+          bin=$(find "$app/Contents/MacOS" -type f -perm -u+x | head -n 1)
+          echo "Binary: $bin"
+          "$bin" --headless --quit-after 2 2>&1 | tee game.log
+          # The script is the only thing that prints this line, so it also
+          # proves the compiled Haxe library was packaged, extracted and loaded.
+          grep -q 'haxe-macos-e2e position=42 speed=12' game.log
+
+      - name: Upload the exported game
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-export-macos
+          path: /tmp/haxe-macos-e2e/export/Game.zip
+
+  ios:
+    runs-on: macos-26
+    name: 🍏 iOS template
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Restore Godot build cache
+        uses: ./.github/actions/godot-cache-restore
+        continue-on-error: true
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Compilation (template_release)
+        uses: ./.github/actions/godot-build
+        with:
+          # `generate_bundle=yes` assembles the Xcode framework bundle
+          # (`libgodot.ios.xcframework`) and zips it, which is what the editor
+          # installs as `ios.zip` and links into a game.
+          scons-flags: module_text_server_fb_enabled=yes arch=arm64 generate_bundle=yes
+          platform: ios
+          target: template_release
+
+      - name: Save Godot build cache
+        uses: ./.github/actions/godot-cache-save
+        continue-on-error: true
+
+      - name: Verify the iOS template carries the Haxe module
+        run: |
+          ls -l bin/*.zip
+          rm -rf /tmp/ios-template
+          mkdir -p /tmp/ios-template
+          unzip -q bin/godot_ios.zip -d /tmp/ios-template
+          # The engine is a static library inside the Xcode framework; the
+          # marker is in the archive's read-only data.
+          find /tmp/ios-template -name '*.a' -print
+          if ! grep -raq HaxeScript /tmp/ios-template; then
+            echo "::error::the iOS template does not contain the Haxe module"
+            exit 1
+          fi
+          echo "The iOS template contains the Haxe module."
+
+      - name: Upload the iOS template
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-ios-template
+          path: bin/godot_ios.zip

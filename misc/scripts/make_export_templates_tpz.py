@@ -34,7 +34,6 @@ templates were built with `extra_suffix=`/`module_mono_enabled=yes`.
 """
 
 import argparse
-import os
 import sys
 import zipfile
 from pathlib import Path
@@ -127,9 +126,7 @@ def read_version():
     namespace = {}
     with open(REPO_ROOT / "version.py", "r", encoding="utf-8") as file:
         exec(file.read(), namespace)  # noqa: S102 - trusted, in-tree file.
-    version = "{}.{}.{}.{}".format(
-        namespace["major"], namespace["minor"], namespace["patch"], namespace["status"]
-    )
+    version = "{}.{}.{}.{}".format(namespace["major"], namespace["minor"], namespace["patch"], namespace["status"])
     module_config = namespace.get("module_config", "")
     if module_config:
         version += f".{module_config}"
@@ -328,11 +325,7 @@ def main():
     print(f"Wrote {output} ({human_size(output.stat().st_size)} from {human_size(total)} of templates).")
     print("Install it with Editor > Manage Export Templates > Install from File,")
     print("or extract it into the versioned templates directory by hand:")
-    print(
-        "  unzip -j -o {} -d ~/.local/share/godot/export_templates/{}".format(
-            output, version
-        )
-    )
+    print("  unzip -j -o {} -d ~/.local/share/godot/export_templates/{}".format(output, version))
     return 0
 
 

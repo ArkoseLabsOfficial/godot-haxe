@@ -418,7 +418,7 @@ String HaxeProject::extract_packaged_library() {
 	if (data.is_empty()) {
 		return String();
 	}
-	String dir = data.path_join("godot").path_join("haxe_library");
+	String dir = data.path_join(OS::get_singleton()->get_godot_dir_name()).path_join("haxe_library");
 	const String extension = get_library_file_name().get_extension();
 	String target = dir.path_join(sanitized_project_name() + "-" + FileAccess::get_md5(source).substr(0, 12) + "." + extension);
 	if (FileAccess::exists(target)) {
@@ -502,7 +502,7 @@ void HaxeProject::prune_caches(const String &p_keep_support_dir) {
 		String data = OS::get_singleton()->get_data_path();
 		const bool project_state = project_state_is_space_free();
 		if (!data.is_empty()) {
-			String godot_dir = data.path_join("godot");
+			String godot_dir = data.path_join(OS::get_singleton()->get_godot_dir_name());
 			String support = godot_dir.path_join("haxe_support");
 			if (DirAccess::dir_exists_absolute(support) && !p_keep_support_dir.begins_with(support)) {
 				remove_directory(support);
@@ -1385,11 +1385,11 @@ Error HaxeProject::save_manifest(const Vector<Dependency> &p_dependencies, Strin
 String HaxeProject::get_space_free_state_dir(const String &p_leaf) {
 	String data = OS::get_singleton()->get_data_path();
 	if (!data.is_empty() && !data.contains(" ") && !data.contains("\t")) {
-		return data.path_join("godot").path_join(p_leaf);
+		return data.path_join(OS::get_singleton()->get_godot_dir_name()).path_join(p_leaf);
 	}
 	String temp = OS::get_singleton()->get_temp_path();
 	if (!temp.is_empty() && !temp.contains(" ") && !temp.contains("\t")) {
-		return temp.path_join("godot").path_join(p_leaf);
+		return temp.path_join(OS::get_singleton()->get_godot_dir_name()).path_join(p_leaf);
 	}
 #ifdef WINDOWS_ENABLED
 	// Both per-user directories live below `C:/Users/<name>`, so a user name
@@ -1398,7 +1398,7 @@ String HaxeProject::get_space_free_state_dir(const String &p_leaf) {
 	// subdirectories there.
 	String program_data = OS::get_singleton()->get_environment("ProgramData").strip_edges();
 	if (!program_data.is_empty() && !program_data.contains(" ") && !program_data.contains("\t")) {
-		return program_data.path_join("godot").path_join(p_leaf);
+		return program_data.path_join(OS::get_singleton()->get_godot_dir_name()).path_join(p_leaf);
 	}
 #endif
 	return String();

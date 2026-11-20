@@ -496,6 +496,16 @@ jobs:
           binary_format/embed_pck=true
           binary_format/architecture="x86_64"
           EOF
+          # A Haxe export needs a template built from this engine, because only
+          # such a template can load `.hx` resources; the module's export plugin
+          # refuses the stock template. The templates this workflow built were
+          # installed above, so point the preset at them. The path is expanded
+          # here (the heredoc above is quoted to keep the Haxe and preset
+          # sources literal).
+          cat >> /tmp/haxe-e2e/export_presets.cfg <<EOF
+          custom_template/debug="${HOME}/.local/share/godot/export_templates/${TEMPLATES_VERSION}/linux_debug.x86_64"
+          custom_template/release="${HOME}/.local/share/godot/export_templates/${TEMPLATES_VERSION}/linux_release.x86_64"
+          EOF
 
       - name: Export
         run: |
@@ -510,6 +520,12 @@ jobs:
           # The script is the only thing that prints this line, so it also
           # proves the compiled library was packaged and loaded.
           grep -q 'haxe-e2e position=42 speed=12' game.log
+
+      - name: Upload the exported game
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-export-linux
+          path: /tmp/haxe-e2e/game.x86_64
 
   # The web build is a WebAssembly side module linked by Emscripten, so this
   # job checks that a project compiles and that the export contains the module
@@ -618,6 +634,9 @@ jobs:
 
       - name: Export
         run: |
+          # `export_project` refuses a missing target directory before it writes
+          # anything, so it has to exist.
+          mkdir -p /tmp/haxe-web-e2e/out
           ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-web-e2e --import
           ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-web-e2e --export-release "Web" /tmp/haxe-web-e2e/out/index.html
           ls -l /tmp/haxe-web-e2e/out
@@ -633,3 +652,179 @@ jobs:
             head -c 4 "$module" | od -An -tx1 | grep -q '00 61 73 6d'
           done
           test -s /tmp/haxe-web-e2e/out/index.pck
+
+      - name: Upload the exported page
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-export-web
+          path: /tmp/haxe-web-e2e/out
+
+  # Android is the one foreign platform whose export can be produced on a Linux
+  # runner: the editor cross-compiles the Haxe library with the NDK and packages
+  # it into an APK. The APK cannot be started here (no device or emulator), so
+  # this job proves the packaging: the compiled library, the class manifest and
+  # the engine library are all inside the archive.
+  export-android:
+    runs-on: ubuntu-24.04
+    name: 🤖 End-to-end Android export
+    needs: [editor-tests, android-templates]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Install hxcpp
+        run: |
+          haxelib setup ~/haxelib
+          haxelib install hxcpp --quiet
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Download the editor
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-editor
+          path: bin
+
+      - name: Download the Android templates
+        uses: ./.github/actions/download-artifact
+        with:
+          name: haxe-android-templates
+          path: templates
+
+      - name: Configure the Android SDK for the editor
+        run: |
+          # The Android exporter reads the SDK and the JDK from the Editor
+          # Settings, not from the environment, while the runner exposes them as
+          # ANDROID_HOME and JAVA_HOME. The editor merges this file over its
+          # defaults, and the name has to be the newest settings file so it is
+          # picked up (`editor_settings-<major>.<minor>.tres`).
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.7.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+
+          # The module links the Haxe library with the NDK this tree pins
+          # (`platform/android/detect.py`), so the library keeps the ABI and API
+          # level the templates were built for. The runner image ships several
+          # NDKs and its default (`ANDROID_NDK_ROOT`) is an older one; point the
+          # remaining steps at the pinned version instead.
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          ndk="$sdk/ndk/29.0.14206865"
+          if [ ! -d "$ndk" ]; then
+            echo "::error::the pinned Android NDK is not installed at '$ndk'"
+            exit 1
+          fi
+          echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
+          echo "Using Android NDK: $ndk"
+
+      - name: Create a minimal project
+        run: |
+          mkdir -p /tmp/haxe-android-e2e/source
+          cat > /tmp/haxe-android-e2e/project.godot <<'EOF'
+          config_version=5
+
+          [application]
+
+          config/name="haxe_android_e2e"
+          run/main_scene="res://main.tscn"
+          config/features=PackedStringArray("4.7")
+          EOF
+          cat > /tmp/haxe-android-e2e/source/Main.hx <<'EOF'
+          package;
+
+          import godot.Node2D;
+          import godot.GD;
+
+          class Main extends Node2D {
+          	override public function _ready():Void {
+          		GD.print('haxe-android-e2e ready');
+          	}
+          }
+          EOF
+          cat > /tmp/haxe-android-e2e/main.tscn <<'EOF'
+          [gd_scene format=3]
+
+          [ext_resource type="Script" path="res://source/Main.hx" id="1_main"]
+
+          [node name="Main" type="Node2D"]
+          script = ExtResource("1_main")
+          EOF
+          cat > /tmp/haxe-android-e2e/export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Android"
+          platform="Android"
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          script_export_mode=2
+
+          [preset.0.options]
+
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          version/code=1
+          version/name="1.0"
+          package/unique_name="com.example.haxee2e"
+          package/name="Haxe E2E"
+          package/signed=true
+          EOF
+          # The module's export plugin refuses an Android preset without a custom
+          # template, because the stock APK has no Haxe module. The templates
+          # this workflow built were downloaded above.
+          cat >> /tmp/haxe-android-e2e/export_presets.cfg <<EOF
+          custom_template/debug="${PWD}/templates/android_debug.apk"
+          custom_template/release="${PWD}/templates/android_release.apk"
+          EOF
+
+      - name: Export
+        run: |
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-android-e2e --import
+          # A debug export is signed with the editor debug keystore, which the
+          # Android exporter creates at start-up; a release export would need a
+          # release keystore that this workflow does not have.
+          ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-android-e2e --export-debug "Android" /tmp/haxe-android-e2e/Game.apk
+          ls -l /tmp/haxe-android-e2e/Game.apk
+
+      - name: Verify the APK contains the Haxe library and manifest
+        run: |
+          apk=/tmp/haxe-android-e2e/Game.apk
+          # One native library per enabled ABI, under the name the game opens.
+          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libhaxe_android_e2e.so'
+          # The class metadata the exported game attaches scripts from.
+          unzip -p "$apk" assets/haxe/scripts.json | head -c 16
+          echo
+          # The engine library itself has to carry the module, or the game
+          # cannot load `.hx` resources at all.
+          unzip -p "$apk" 'lib/arm64-v8a/libgodot_android.so' > /tmp/libgodot_android.so
+          count=$(grep -ac HaxeScript /tmp/libgodot_android.so || true)
+          echo "HaxeScript markers in the APK engine library: $count"
+          test "$count" -ge 1
+
+      - name: Upload the exported APK
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: haxe-export-android
+          path: /tmp/haxe-android-e2e/Game.apk

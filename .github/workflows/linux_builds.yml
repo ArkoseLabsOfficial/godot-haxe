@@ -46,7 +46,20 @@ jobs:
             godot-cpp: true
             clangd-tidy: true
 
-          - name: Editor with doubles and GCC sanitizers (target=editor, dev_build=yes, scu_build=yes, precision=double, use_asan=yes, use_ubsan=yes, linker=mold)
+          # `linker=lld`, not `mold`: the `-O0` sanitizer build is larger than
+          # 2 GiB (the module and every other one is compiled in), and mold puts
+          # `.eh_frame` before `.text`, so `.eh_frame` → `DW.ref.*` relocations
+          # (the C++ personality routine from libstdc++, a Rust one from
+          # AccessKit) have to span the whole read-only and code payload and
+          # overflow the 32-bit PC-relative range:
+          #   mold: error: ...(.eh_frame): relocation R_X86_64_PC32 against
+          #   DW.ref.__gxx_personality_v0 out of range: 2158640389 ...
+          # lld places `.eh_frame` after `.text`, where that distance is small,
+          # which is how the clang sanitizer job already links its >2.5 GiB
+          # binary. GNU ld has the equivalent limit on the `.text` → `.bss`
+          # relocations in `crtbeginS.o`, so the linker is picked for its layout
+          # here, not for speed.
+          - name: Editor with doubles and GCC sanitizers (target=editor, dev_build=yes, scu_build=yes, precision=double, use_asan=yes, use_ubsan=yes, linker=lld)
             cache-name: linux-editor-double-sanitizers
             target: editor
             # Debug symbols disabled as they're huge on this build and we hit the 14 GB limit for runners.
@@ -57,7 +70,7 @@ jobs:
               precision=double
               use_asan=yes
               use_ubsan=yes
-              linker=mold
+              linker=lld
             bin: ./bin/godot.linuxbsd.editor.dev.double.x86_64.san
             proj-test: true
             free-space: true
@@ -178,10 +191,6 @@ jobs:
             echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
             echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Install mold linker
-        if: matrix.proj-test
-        uses: rui314/setup-mold@v1
 
       - name: Compilation
         uses: ./.github/actions/godot-build

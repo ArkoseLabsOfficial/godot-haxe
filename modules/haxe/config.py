@@ -2,32 +2,36 @@ def can_build(env, platform):
     # The Haxe module only needs a C++ compiler for the engine side. The Haxe
     # toolchain (haxe + hxcpp) is an external dependency of the projects that
     # use the language, not of the engine build.
+    #
+    # The Android editor is the one exception: it *is* the editor that has to
+    # compile a project, and the Haxe compiler cannot be installed or run on
+    # Android. Shipping the language there would only offer a tool that can
+    # never work, so the module is left out of that target. Android templates
+    # keep it: a game is compiled on a desktop and only run on the device.
+    if platform == "android" and env["target"] == "editor":
+        return False
     return True
 
 
 def configure(env):
-    # The Haxe library of a web game is a WebAssembly side module loaded by
-    # dlopen. hxcpp maps Haxe `throw`/`try` to C++ exceptions, and a side module
-    # that throws needs exception support in the page runtime: Emscripten's
-    # dynamic linker resolves the libc++abi entry points (`__cxa_throw`,
-    # `__cxa_begin_catch`) and the `invoke_*` wrappers against the main module.
-    # Godot itself compiles with `-fno-exceptions`, so this module enables the
-    # runtime support at link time (`-fexceptions` adds Emscripten's exception
-    # library, `EMCC_FORCE_STDLIBS` makes sure libc++abi is part of the main
-    # module and therefore visible to dynamic libraries). The engine code is
-    # still compiled without exceptions; only the support code is linked in.
-    if env["platform"] == "web":
+    # Dynamic linking is what lets a web page load the compiled Haxe library at
+    # all: without it the engine is a single module with no dynamic linker, and
+    # `HaxeRuntime` cannot resolve the library's C entry points. The extra link
+    # flags below only make sense for such a template, and the plain web
+    # template (web_builds.yml) would reject them.
+    if env["platform"] == "web" and env["dlink_enabled"]:
         # WebAssembly exceptions (not Emscripten's JS-based scheme): the latter
         # is incompatible with the `SUPPORT_LONGJMP=wasm` setting the web
         # platform forces, and wasm exceptions are the only mode that works with
         # dynamic linking in current Emscripten.
         #
-        # `-fwasm-exceptions` makes the runtime create and export the
-        # `__cpp_exception` tag that a throwing side module imports. It also
-        # switches the JS stack allocator to a wasm helper, which has to be
-        # exported explicitly because the main module's symbol list would
-        # otherwise hide it.
-        env.Append(LINKFLAGS=["-fwasm-exceptions", "-Wl,--export=__emscripten_stack_alloc"])
+        # `-fwasm-exceptions` makes the runtime create the `__cpp_exception` tag
+        # that a throwing side module imports. It also switches the stack
+        # allocator to a wasm helper (`emscripten_stack_alloc`), which the main
+        # module already defines *and* exports under this mode; the dlink
+        # template links with `MAIN_MODULE=1 EXPORT_ALL=1`, so every defined
+        # symbol (including that helper) is exported without naming it here.
+        env.Append(LINKFLAGS=["-fwasm-exceptions"])
 
 
 def is_enabled():

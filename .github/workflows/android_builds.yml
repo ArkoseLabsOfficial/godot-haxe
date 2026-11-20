@@ -92,9 +92,27 @@ jobs:
         if: matrix.target == 'editor'
         run: |
           cd platform/android/java
-          ./gradlew generateGodotEditor
-          ./gradlew generateGodotHorizonOSEditor
-          ./gradlew generateGodotPicoOSEditor
+          # Gradle resolves its plugins from Maven Central, Google Maven and
+          # the Gradle Plugin Portal while it configures the build. A brief
+          # outage of one repository fails the whole configuration with
+          # "Could not resolve ... Received status code 429 ... Too Many
+          # Requests" even though the artifacts are reachable again moments
+          # later, so the command is retried before the job is failed. A real
+          # resolution error fails the same way on every attempt, so the retry
+          # cannot mask one.
+          success=no
+          for attempt in 1 2 3; do
+            if ./gradlew generateGodotEditor generateGodotHorizonOSEditor generateGodotPicoOSEditor; then
+              success=yes
+              break
+            fi
+            echo "::warning::generating the Android editors failed (attempt $attempt/3), retrying in 30s"
+            sleep 30
+          done
+          if [ "$success" != yes ]; then
+            echo "::error::generating the Android editors failed after 3 attempts"
+            exit 1
+          fi
           cd ../../..
           ls -l bin/android_editor_builds/
 

@@ -60,7 +60,10 @@ String support_root() {
 	}
 #endif
 	String data = OS::get_singleton()->get_data_path();
-	return data.is_empty() ? String() : data.path_join("godot").path_join("haxe_support");
+	// The engine directory is lowercase on Linux but `Godot` on macOS and
+	// Windows, and the OS reports it (and rejects a differently cased path
+	// with a "case mismatch" warning), so it is asked for instead of assumed.
+	return data.is_empty() ? String() : data.path_join(OS::get_singleton()->get_godot_dir_name()).path_join("haxe_support");
 }
 
 /* FNV-1a over the file list, used to version the extraction directory. A new
