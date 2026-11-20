@@ -54,6 +54,10 @@
 #include "core/object/script_language.h"
 #include "core/templates/hash_set.h"
 #include "core/variant/variant.h"
+// `Node` is a base class of every scripted scene type the tests instantiate.
+// Editor builds get it through `scene/gui/text_edit.h` below, template builds
+// (which compile these tests with `tests=yes`) do not, so include it directly.
+#include "scene/main/node.h"
 #include "tests/test_macros.h"
 
 namespace TestHaxe {

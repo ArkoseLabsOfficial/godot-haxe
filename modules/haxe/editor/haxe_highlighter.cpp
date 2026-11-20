@@ -630,7 +630,7 @@ Dictionary HaxeSyntaxHighlighter::_highlight_import_line(const String &p_line) {
 	// The colour map stores one entry at the first column of every run of the
 	// same colour; the value must be a fresh Dictionary because Dictionary is
 	// reference counted and would otherwise be shared between entries.
-	auto emit = [&color_map, &last_color, this](int p_column, const Color &p_color) {
+	auto emit = [&color_map, &last_color](int p_column, const Color &p_color) {
 		if (p_color == last_color) {
 			return;
 		}

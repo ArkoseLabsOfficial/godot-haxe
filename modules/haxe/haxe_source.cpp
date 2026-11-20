@@ -337,8 +337,8 @@ String unquote_meta_argument(const String &p_argument) {
 
 class SourceParser {
 public:
-	SourceParser(const String &p_source, const String &p_path, HaxeClassInfo &p_info) :
-			source(p_source), path(p_path), info(p_info), tokens(source_tokens()) {
+	SourceParser(const String &p_source, HaxeClassInfo &p_info) :
+			source(p_source), info(p_info), tokens(source_tokens()) {
 		set_targets(p_info.members, p_info.variables, p_info.functions);
 		current_type_name = p_info.name;
 	}
@@ -816,7 +816,6 @@ public:
 
 private:
 	const String &source;
-	const String &path;
 	HaxeClassInfo &info;
 	Vector<Token> source_tokens_cache;
 	Vector<DocComment> doc_comments;
@@ -1398,7 +1397,7 @@ const HaxeMemberInfo *HaxeClassInfo::find_variable(const String &p_name) const {
 Error parse_haxe_source(const String &p_source, const String &p_path, HaxeClassInfo &r_info) {
 	r_info = HaxeClassInfo();
 	r_info.path = p_path;
-	SourceParser parser(p_source, p_path, r_info);
+	SourceParser parser(p_source, r_info);
 	return parser.parse();
 }
 

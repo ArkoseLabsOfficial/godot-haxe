@@ -50,7 +50,8 @@ String write_source(const String &p_dir, const String &p_name, const String &p_c
 	DirAccess::make_dir_recursive_absolute(p_dir);
 	String path = p_dir.path_join(p_name);
 	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
-	ERR_FAIL_NULL_V(file, String());
+	// `Ref<T>` deletes comparison against `nullptr`, unlike `ERR_FAIL_NULL_V`.
+	ERR_FAIL_COND_V_MSG(file.is_null(), String(), "Cannot open the scratch file for writing.");
 	file->store_string(p_contents);
 	return path;
 }

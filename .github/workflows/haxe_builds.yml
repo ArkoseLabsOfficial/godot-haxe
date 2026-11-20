@@ -83,6 +83,12 @@ jobs:
     runs-on: ubuntu-24.04
     name: ${{ matrix.name }}
     timeout-minutes: 180
+    # Templates are built the way a player receives them: none of the developer
+    # options apply. `dev_mode=yes` implies `werror=yes tests=yes`, and MinGW's
+    # GCC (and the MSVC job in `windows_builds.yml`) then rejects warnings that
+    # a template does not need to be free of.
+    env:
+      SCONS_FLAGS: module_text_server_fb_enabled=yes
     strategy:
       fail-fast: false
       matrix:
@@ -164,7 +170,29 @@ jobs:
 
       - name: Install the MinGW cross toolchain
         if: matrix.platform == 'windows'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mingw-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            mingw-w64 g++-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix
+          # Godot only supports the posix-threads MinGW. The runner image ships
+          # both thread models and can leave the win32 one selected, which makes
+          # `use_mingw=yes` stop with "not using posix threads".
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc \
+            /usr/bin/x86_64-w64-mingw32-gcc-posix || true
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ \
+            /usr/bin/x86_64-w64-mingw32-g++-posix || true
+          x86_64-w64-mingw32-g++ --version | head -n 1
+          # `--enable-threads` in `-v` is the authoritative thread model, and
+          # `--version` is what SCons parses: a win32 build prints
+          # `<version>-win32`, which `methods.get_compiler_version()` reports as
+          # `metadata1` and `SConstruct` turns into the error above. Fail on the
+          # same signal the build uses, and print the configure line to make a
+          # `update-alternatives` problem obvious.
+          x86_64-w64-mingw32-g++ -v 2>&1 | grep -o -- '--enable-threads=[a-z]*' | head -n 1
+          if x86_64-w64-mingw32-g++ --version | head -n 1 | grep -q -- "-win32"; then
+            echo "::error::the selected MinGW uses win32 threads"
+            exit 1
+          fi
 
       - name: Setup Emscripten
         if: matrix.platform == 'web'
@@ -225,6 +253,9 @@ jobs:
     runs-on: ubuntu-24.04
     name: 🤖 Android templates
     timeout-minutes: 180
+    # Same as the desktop templates: a template is not a developer build.
+    env:
+      SCONS_FLAGS: module_text_server_fb_enabled=yes
     steps:
       - name: Checkout
         uses: actions/checkout@v7

@@ -474,6 +474,12 @@ public:
 	bool debug_break(const String &p_error, bool p_allow_continue = true);
 	bool debug_break_parse(const String &p_file, int p_line, const String &p_error);
 
+	// GCC's `-Wdangling-pointer` (part of `-Wall`) cannot see that the caller owns
+	// the `CallLevel` it passes in as a pointer and restores `_call_stack` from it
+	// in `exit_function()`, so it reports the store below as a dangling pointer.
+	// The lifetime is exactly the function call, which the analyzer does not model.
+	GODOT_GCC_WARNING_PUSH
+	GODOT_GCC_WARNING_IGNORE("-Wdangling-pointer")
 	_FORCE_INLINE_ void enter_function(CallLevel *call_level, GDScriptInstance *p_instance, GDScriptFunction *p_function, Variant *p_stack, int *p_ip, int *p_line) {
 		if (!track_call_stack) {
 			return;
@@ -507,6 +513,7 @@ public:
 		call_level->line = p_line;
 		_call_stack_size++;
 	}
+	GODOT_GCC_WARNING_POP
 
 	_FORCE_INLINE_ void exit_function() {
 		if (!track_call_stack) {

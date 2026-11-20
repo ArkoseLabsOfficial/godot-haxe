@@ -25,10 +25,17 @@ jobs:
           - name: Editor (target=editor)
             cache-name: windows-editor
             target: editor
+            # `dev_mode=yes` turns warnings into errors. The MSVC toolset in the
+            # runner image reports C4723 ("potential divide by 0") for the
+            # guarded divisions in `core/math/math_funcs.h`
+            # (`cubic_interpolate_in_time`: `p_to_t == 0 ? 0.5 : t / p_to_t`),
+            # a documented false positive of constant folding. Keep the
+            # warnings, but do not fail the build on them.
             scons-flags: >-
               windows_subsystem=console
               vsproj=yes
               vsproj_gen_only=no
+              werror=no
             bin: ./bin/godot.windows.editor.x86_64.exe
             compiler: msvc
 
