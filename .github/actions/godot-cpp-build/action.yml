@@ -37,4 +37,8 @@ runs:
       shell: sh
       env:
         SCONS_CACHE: ${{ inputs.scons-cache }}
-      run: scons --directory=./godot-cpp/test "gdextension_dir=${{ github.workspace }}" ${{ inputs.scons-flags }}
+      # `site_scons` makes SCons use a response file for the binding archive:
+      # the generated command line exceeds Linux's argument-size limit, and
+      # SCons's `ar` tool does not apply the `$TEMPFILE` workaround that its
+      # link command already uses. See the file for details.
+      run: scons --directory=./godot-cpp/test --site-dir="${{ github.workspace }}/.github/actions/godot-cpp-build/site_scons" "gdextension_dir=${{ github.workspace }}" ${{ inputs.scons-flags }}

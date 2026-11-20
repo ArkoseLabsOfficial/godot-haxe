@@ -84,7 +84,22 @@ jobs:
         if: matrix.target == 'template_debug'
         run: |
           cd platform/android/java
-          ./gradlew generateGodotTemplates
+          # See "Generate Godot editor" below: a transient Maven outage
+          # (status 429) during plugin resolution is retried rather than
+          # failing the job on the first attempt.
+          success=no
+          for attempt in 1 2 3; do
+            if ./gradlew generateGodotTemplates; then
+              success=yes
+              break
+            fi
+            echo "::warning::generating the Android templates failed (attempt $attempt/3), retrying in 30s"
+            sleep 30
+          done
+          if [ "$success" != yes ]; then
+            echo "::error::generating the Android templates failed after 3 attempts"
+            exit 1
+          fi
           cd ../../..
           ls -l bin/
 

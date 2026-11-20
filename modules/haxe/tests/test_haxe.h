@@ -60,32 +60,14 @@
 #include "scene/main/node.h"
 #include "tests/test_macros.h"
 
+// The helpers the cases below call are declared in `test_haxe_utils.h` and
+// defined in `test_haxe.cpp`. That header is deliberately separate: this file
+// holds the test cases and is compiled into `modules_tests.gen.h`, so if it
+// also held the definitions' declarations, `test_haxe.cpp` including it would
+// register every case a second time.
+#include "test_haxe_utils.h"
+
 namespace TestHaxe {
-
-/* Creates a scratch directory for source files and returns its path. */
-String make_scratch_dir();
-
-/* Writes `p_contents` to `<p_dir>/<p_name>`, returning the absolute path. */
-String write_source(const String &p_dir, const String &p_name, const String &p_contents);
-
-/* Removes a directory created by `make_scratch_dir`. */
-void remove_scratch_dir(const String &p_dir);
-
-/* Points the project's Haxe source directory at `p_dir` while this object
- * exists, so that the source index and the completion resolve classes from the
- * scratch project, then restores the previous setting. */
-class SourceDirScope {
-public:
-	explicit SourceDirScope(const String &p_dir);
-	~SourceDirScope();
-
-private:
-	bool had_setting = false;
-	Variant previous;
-};
-
-/* Runs completion on `p_code` and returns the displayed option names. */
-HashSet<String> completion_names(const String &p_code, const String &p_path = String());
 
 TEST_CASE("[Modules][Haxe] script metadata is derived from the source") {
 	const String dir = make_scratch_dir();
@@ -2130,6 +2112,21 @@ TEST_CASE("[Modules][Haxe] an exported game reads script metadata without the so
 	remove_scratch_dir(dir);
 }
 
+TEST_CASE("[Modules][Haxe] a build with no packaged manifest is not an exported game") {
+	// On a non-editor build `uses_packaged_metadata()` decides from the game
+	// itself. Without the manifest an export ships, a template built from
+	// source -- including the `tests=yes` templates the engine test suite runs
+	// in -- has to keep reading its real `.hx` files. Deciding this from the
+	// build options instead sent a source template down the packaged path and
+	// an export of it lost every script.
+	HaxeProject::set_packaged_metadata_for_testing(false);
+	HaxeProject::reset_packaged_metadata_state();
+	CHECK_FALSE(HaxeProject::uses_packaged_metadata());
+	// Restore the default so the following cases re-decide for themselves.
+	HaxeProject::set_packaged_metadata_for_testing(false);
+	HaxeProject::reset_packaged_metadata_state();
+}
+
 TEST_CASE("[Modules][Haxe] Android libraries use the name the linker resolves") {
 	ProjectSettings *settings = ProjectSettings::get_singleton();
 	const bool had_name = settings->has_setting("application/config/name");
@@ -2180,6 +2177,53 @@ TEST_CASE("[Modules][Haxe] Android libraries use the name the linker resolves") 
 	} else {
 		settings->clear("application/config/name");
 	}
+}
+
+TEST_CASE("[Modules][Haxe] a desktop build pins the architecture of the host") {
+	// hxcpp normally infers the host architecture itself: `uname -m` on POSIX,
+	// the `PROCESSOR_ARCHITECTURE` variables on Windows. On Windows the latter
+	// can report the emulated 32-bit architecture even though the editor is
+	// 64-bit, and the resulting 32-bit library cannot be loaded (`error 193`,
+	// ERROR_BAD_EXE_FORMAT). The engine knows its own architecture at compile
+	// time, so the desktop build passes the matching hxcpp define explicitly.
+	const Vector<String> defines = HaxeBuild::host_arch_defines();
+	REQUIRE(defines.size() == 2);
+	CHECK(defines[0] == "-D");
+#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__)
+	CHECK(defines[1] == "HXCPP_ARM64");
+#elif defined(_WIN64) || defined(__x86_64__) || defined(__amd64__) || defined(__LP64__)
+	CHECK(defines[1] == "HXCPP_M64");
+#else
+	CHECK(defines[1] == "HXCPP_M32");
+#endif
+
+	if (!HaxeSupport::is_available()) {
+		return;
+	}
+
+	// The define has to reach the real compiler arguments, not just the helper.
+	const String dir = make_scratch_dir();
+	(void)write_source(dir, "Main.hx",
+			"package;\n"
+			"import godot.Node;\n"
+			"class Main extends Node {\n"
+			"}\n");
+	SourceDirScope scope(dir);
+
+	Vector<HaxeBuild::Library> libraries;
+	Vector<HaxeClassInfo> classes;
+	Vector<Pair<String, String>> mappings;
+	const Vector<String> arguments = HaxeBuild::collect_arguments(true, false, libraries, classes, mappings);
+
+	bool pinned = false;
+	for (int i = 0; i + 1 < arguments.size(); i++) {
+		if (arguments[i] == "-D" && arguments[i + 1] == defines[1]) {
+			pinned = true;
+		}
+	}
+	CHECK(pinned);
+
+	remove_scratch_dir(dir);
 }
 
 } // namespace TestHaxe

@@ -175,14 +175,14 @@ public:
 	static String get_packaged_metadata_path();
 
 	/* Whether the source index should be built from the packaged manifest
-	 * rather than by scanning the (stubbed) project sources. Only a shipped
-	 * template is an exported game: the editor has the real sources, and so
-	 * does a `tests=yes` template, which is a build the engine test suite runs
-	 * in. */
+	 * rather than by scanning the (stubbed) project sources. Decided at run
+	 * time from the manifest itself: an exported game ships it, a project
+	 * (including an engine-test run in a `tests=yes` template) does not. */
 	static bool uses_packaged_metadata();
-	/* Marks that `packaged_metadata_loaded` was already attempted, so a game
-	 * without a manifest reports the failure once instead of on every lookup.
-	 * The engine tests reset it between cases. */
+	/* Marks that `packaged_metadata_loaded` was already attempted and clears
+	 * the cached manifest detection, so a game without a manifest reports the
+	 * failure once instead of on every lookup. The engine tests reset it
+	 * between cases. */
 	static void reset_packaged_metadata_state();
 	/* Engine tests run inside an editor or a `tests=yes` template, neither of
 	 * which is an exported game, so they need a way to exercise the path a game

@@ -70,6 +70,10 @@ bool HaxeProject::packaged_metadata_loaded = false;
  * and the tests that exercise the exported-game path need to turn it back on
  * there too. Nothing outside the tests calls the setter. */
 static bool packaged_metadata_forced = false;
+/* Tri-state cache for the runtime detection in `uses_packaged_metadata()`:
+ * -1 not decided yet, 0 a project, 1 an exported game. It is reset together
+ * with `packaged_metadata_loaded` so the engine tests can flip the answer. */
+static int packaged_metadata_detected = -1;
 
 static String absolute_project_path(const String &p_setting, const String &p_default) {
 	String path = GLOBAL_GET(p_setting);
@@ -1107,27 +1111,31 @@ bool HaxeProject::uses_packaged_metadata() {
 		return true;
 	}
 #ifdef TOOLS_ENABLED
-	// The editor (and a project run from the editor) always has the real
-	// sources and the build directory, even when the engine was built with the
-	// editor tools. Only a template build is an exported game.
-	return false;
-#elif defined(TESTS_ENABLED)
-	// `tests=yes` is what puts the engine test suite into a build; Godot's own
-	// workflows pass it to export templates too, and `--test` then runs on the
-	// template. Such a build is not an exported game: its `.hx` files are the
-	// real sources, so the tests get the source index. The packaged path is
-	// still covered, through `set_packaged_metadata_for_testing()`.
+	// The editor (and a project run from it) always has the real sources and
+	// the build directory, even when the "game" is a `tests=yes` build the
+	// engine test suite drives with `--test`. There is no manifest in a
+	// project directory, and treating one as a game would break the editor.
 	return false;
 #else
-	// A template without the test suite is an exported game: the sources were
-	// replaced by empty stubs and the manifest is the index.
-	return true;
+	// Decide from the game itself instead of from the build options. An
+	// exported game ships the manifest and empty `.hx` stubs, while a
+	// template built from source (Godot's workflows pass `tests=yes` to export
+	// templates too) keeps the real sources and has no manifest. Deciding this
+	// from the build options misclassified the latter as a game, so a real
+	// export parsed the empty stubs and lost every script. The engine tests
+	// still exercise both paths explicitly through
+	// `set_packaged_metadata_for_testing()`.
+	if (packaged_metadata_detected < 0) {
+		packaged_metadata_detected = FileAccess::exists(get_packaged_metadata_path()) ? 1 : 0;
+	}
+	return packaged_metadata_detected == 1;
 #endif
 }
 
 void HaxeProject::reset_packaged_metadata_state() {
 	MutexLock lock(cache_mutex);
 	packaged_metadata_loaded = false;
+	packaged_metadata_detected = -1;
 }
 
 void HaxeProject::set_packaged_metadata_for_testing(bool p_enabled) {

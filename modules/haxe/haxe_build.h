@@ -146,6 +146,12 @@ public:
 	 * without spawning a compiler. */
 	static Vector<String> android_compiler_defines(const String &p_abi, const String &p_ndk_root);
 
+	/* Compiler arguments that pin the architecture of a desktop build to the
+	 * one the engine itself was compiled for, so a library built by `haxe` on
+	 * the machine running the editor always matches the process that loads it.
+	 * Exposed for `collect_arguments()` and for tests. */
+	static Vector<String> host_arch_defines();
+
 	/* Compiler arguments that make hxcpp link an Emscripten side module for the
 	 * web export. `p_hxcpp_config_path` is the file
 	 * `write_web_hxcpp_config()` produced. */

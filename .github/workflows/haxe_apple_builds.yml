@@ -82,10 +82,24 @@ jobs:
 
       # The Haxe toolchain is external to the engine: the module shells out to
       # `haxe`/`hxcpp` to compile the game library during an export.
+      # `krdlab/setup-haxe` has no arm64 build and the macOS runners here are
+      # arm64-only, so the toolchain comes from Homebrew instead. The formula's
+      # stable version tracks the release this tree pins; the check below fails
+      # the job if that ever drifts, rather than silently compiling the game
+      # with a different Haxe.
       - name: Setup Haxe
-        uses: krdlab/setup-haxe@v1
-        with:
-          haxe-version: ${{ env.HAXE_VERSION }}
+        run: |
+          brew install haxe
+          # Homebrew's `haxe` is built with its standard library at a fixed
+          # prefix and does not find it on its own from an arbitrary working
+          # directory, so point it there explicitly (the formula's own caveat).
+          echo "HAXE_STD_PATH=$(brew --prefix)/lib/haxe/std" >> "$GITHUB_ENV"
+          installed="$(haxe --version)"
+          echo "Installed Haxe: $installed"
+          if [ "$installed" != "$HAXE_VERSION" ]; then
+            echo "::error::Homebrew installed Haxe $installed, expected $HAXE_VERSION"
+            exit 1
+          fi
 
       - name: Install hxcpp
         run: |

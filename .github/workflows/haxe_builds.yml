@@ -799,6 +799,11 @@ jobs:
           custom_template/release="${PWD}/templates/android_release.apk"
           EOF
 
+      - name: Make the editor executable
+        run: |
+          # The downloaded editor artifact loses the executable bit.
+          chmod +x bin/godot.linuxbsd.editor.dev.x86_64
+
       - name: Export
         run: |
           ./bin/godot.linuxbsd.editor.dev.x86_64 --headless --path /tmp/haxe-android-e2e --import

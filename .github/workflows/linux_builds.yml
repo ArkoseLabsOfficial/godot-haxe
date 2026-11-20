@@ -169,6 +169,17 @@ jobs:
           python-version: 3.9
           scons-version: 4.4
 
+      # GCC's `-fuse-ld=lld` only looks for `ld.lld` on PATH, unlike the clang
+      # driver, which also searches its own toolchain directory. The runner
+      # image ships LLD inside the LLVM install, so the clang jobs find it but
+      # a GCC build fails with `collect2: fatal error: cannot find 'ld'`.
+      # Install the system package for the builds that ask for LLD.
+      - name: Install LLD
+        if: contains(matrix.scons-flags, 'linker=lld')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
+
       - name: Force remove preinstalled .NET SDKs
         if: matrix.build-mono
         run: |

@@ -28,7 +28,10 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "test_haxe.h"
+#include "../haxe_completion.h"
+#include "../haxe_language.h"
+#include "../haxe_project.h"
+#include "test_haxe_utils.h"
 
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"

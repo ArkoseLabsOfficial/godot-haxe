@@ -1125,6 +1125,27 @@ Vector<String> HaxeBuild::android_compiler_defines(const String &p_abi, const St
 	return arguments;
 }
 
+/* The hxcpp define that pins the architecture of a build for the machine the
+ * editor runs on. hxcpp otherwise infers the host architecture, which is wrong
+ * on Windows when the process it reads reports a 32-bit architecture
+ * (`PROCESSOR_ARCHITECTURE` can be missing or emulated), and the resulting
+ * 32-bit DLL cannot be loaded by the 64-bit editor (`error 193`,
+ * ERROR_BAD_EXE_FORMAT). The engine knows its own architecture at compile time
+ * and the library is loaded into the engine process, so hand hxcpp the matching
+ * define instead of letting it guess. */
+Vector<String> HaxeBuild::host_arch_defines() {
+	Vector<String> arguments;
+	arguments.push_back("-D");
+#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__)
+	arguments.push_back("HXCPP_ARM64");
+#elif defined(_WIN64) || defined(__x86_64__) || defined(__amd64__) || defined(__LP64__)
+	arguments.push_back("HXCPP_M64");
+#else
+	arguments.push_back("HXCPP_M32");
+#endif
+	return arguments;
+}
+
 /* Looks for an executable on the editor's PATH. Used for the external tools of
  * the web target: `emcc` lives in the emsdk installation, which is on PATH
  * whenever `emsdk_env.sh` has been sourced. */
@@ -1489,6 +1510,13 @@ Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const
 		}
 	} else if (!p_abi.is_empty()) {
 		for (const String &argument : android_compiler_defines(p_abi, p_ndk_root)) {
+			arguments.push_back(argument);
+		}
+	} else {
+		// Desktop build: the library is loaded into the engine process, so it
+		// has to match the engine's architecture rather than whatever hxcpp
+		// infers for the host.
+		for (const String &argument : host_arch_defines()) {
 			arguments.push_back(argument);
 		}
 	}

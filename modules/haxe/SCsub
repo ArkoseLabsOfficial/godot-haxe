@@ -16,10 +16,8 @@ if env.editor_build:
     env_haxe.add_source_files(env.modules_sources, "./editor/*.cpp")
 
 if env["tests"]:
-    # The tests exercise behavior that is not compiled into a shipped template
-    # (the packed metadata of an exported game is decided at compile time), so
-    # the module tells the two apart with the same define the other modules use.
-    env_haxe.Append(CPPDEFINES=["TESTS_ENABLED"])
+    # The tests compile into the module's library and run through the engine's
+    # `--test` entry point, including in a `tests=yes` template.
     env_haxe.add_source_files(env.modules_sources, "./tests/*.cpp")
 
 

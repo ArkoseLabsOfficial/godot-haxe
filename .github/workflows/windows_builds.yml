@@ -51,6 +51,8 @@ jobs:
           - name: Template (target=template_release)
             cache-name: windows-template
             target: template_release
+            # Same C4723 false positive as the editor job above; MSVC only.
+            scons-flags: werror=no
             bin: ./bin/godot.windows.template_release.x86_64.console.exe
             compiler: msvc
 
