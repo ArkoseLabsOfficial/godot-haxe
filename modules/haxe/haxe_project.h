@@ -113,9 +113,10 @@ public:
 	static String get_android_library_soname();
 
 	/* The resource path the compiled game library is packaged under in an
-	 * exported game (`res://haxe/<Name>.dso`). The export plugin writes that
-	 * file into the pck; an exported game has no build directory, so the
-	 * runtime loads the library from here instead of building one. */
+	 * exported game (`res://haxe/<Name>.<ext>`, the extension being the host
+	 * toolchain's). The export plugin writes that file into the pck; an
+	 * exported game has no build directory, so the runtime loads the library
+	 * from here instead of building one. */
 	static String get_packaged_library_path();
 	/* Reads the packaged library out of the exported pck into a real file, so
 	 * the platform's dynamic loader can open it. Returns the extracted path,
@@ -174,15 +175,19 @@ public:
 	static String get_packaged_metadata_path();
 
 	/* Whether the source index should be built from the packaged manifest
-	 * rather than by scanning the (stubbed) project sources. */
+	 * rather than by scanning the (stubbed) project sources. Only a shipped
+	 * template is an exported game: the editor has the real sources, and so
+	 * does a `tests=yes` template, which is a build the engine test suite runs
+	 * in. */
 	static bool uses_packaged_metadata();
 	/* Marks that `packaged_metadata_loaded` was already attempted, so a game
 	 * without a manifest reports the failure once instead of on every lookup.
 	 * The engine tests reset it between cases. */
 	static void reset_packaged_metadata_state();
-	/* Engine tests run with the editor build and no exported pck, so they need
-	 * a way to exercise the path an exported game takes. The editor never
-	 * enables this. */
+	/* Engine tests run inside an editor or a `tests=yes` template, neither of
+	 * which is an exported game, so they need a way to exercise the path a game
+	 * takes -- and, in the template case, to get the source path back. Nothing
+	 * but the tests calls this. */
 	static void set_packaged_metadata_for_testing(bool p_enabled);
 	/* How many times the whole project index was rebuilt. Tests use it to
 	 * assert that editing one script does not reparse the project. */

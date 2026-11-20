@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HaxeSyntaxHighlighter" inherits="EditorSyntaxHighlighter" api_type="editor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A Haxe syntax highlighter that can be used with [TextEdit] and [CodeEdit] nodes.
+	</brief_description>
+	<description>
+		Highlights `.hx` source with the editor's Haxe colors: comments (including doc comments), strings and string interpolation, `@:` metadata, numbers, keywords, engine and project types, and conditional-compilation directives. It is applied to Haxe scripts by the script editor; it can also be assigned to a [TextEdit] or [CodeEdit] node to show Haxe code elsewhere in the editor.
+		[b]Note:[/b] This class can only be used for editor plugins because it relies on editor settings.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

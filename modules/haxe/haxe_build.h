@@ -185,6 +185,12 @@ public:
 	 * own. */
 	static Vector<Pair<String, String>> web_toolchain_environment(const String &p_emcc);
 
+	/* The character that separates the entries of `PATH`-style environment
+	 * variables: `;` on Windows, `:` everywhere else. `find_in_path()` and
+	 * `web_toolchain_environment()` both split or join a list with it, and the
+	 * engine tests build one to exercise them. */
+	static String path_list_separator();
+
 	/* Identity of a web toolchain: the executable and its modification time.
 	 * Objects and libraries produced by one Emscripten are not interchangeable
 	 * with another's (the dynamic-linking encoding and the shared-memory

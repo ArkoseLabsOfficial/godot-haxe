@@ -478,8 +478,13 @@ public:
 	// the `CallLevel` it passes in as a pointer and restores `_call_stack` from it
 	// in `exit_function()`, so it reports the store below as a dangling pointer.
 	// The lifetime is exactly the function call, which the analyzer does not model.
+	// The option only exists from GCC 12 on, and `#pragma GCC diagnostic` rejects
+	// a name it does not know with `-Wpragmas`, so the suppression is version
+	// guarded rather than applied to every GCC.
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 12)
 	GODOT_GCC_WARNING_PUSH
 	GODOT_GCC_WARNING_IGNORE("-Wdangling-pointer")
+#endif
 	_FORCE_INLINE_ void enter_function(CallLevel *call_level, GDScriptInstance *p_instance, GDScriptFunction *p_function, Variant *p_stack, int *p_ip, int *p_line) {
 		if (!track_call_stack) {
 			return;
@@ -513,7 +518,9 @@ public:
 		call_level->line = p_line;
 		_call_stack_size++;
 	}
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 12)
 	GODOT_GCC_WARNING_POP
+#endif
 
 	_FORCE_INLINE_ void exit_function() {
 		if (!track_call_stack) {

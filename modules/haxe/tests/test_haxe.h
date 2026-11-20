@@ -422,7 +422,7 @@ TEST_CASE("[Modules][Haxe] qualified receivers complete project and engine membe
 	SourceDirScope scope(dir);
 
 	// `package.Class.` is a class reference: only the members Haxe accepts
-	// there are offered (statics and constants), not instance members such as
+	// there are offered (statistics and constants), not instance members such as
 	// `run()`.
 	const HashSet<String> project = completion_names(
 			"class Other {\n"
@@ -438,7 +438,7 @@ TEST_CASE("[Modules][Haxe] qualified receivers complete project and engine membe
 	CHECK_FALSE(project.has("run"));
 
 	// The same for a fully qualified engine class: instance members like
-	// `position` and `add_child` are not statics.
+	// `position` and `add_child` are not statistics.
 	const HashSet<String> engine = completion_names(
 			"class Other {\n"
 			"\tfunction f() {\n"
@@ -550,7 +550,7 @@ TEST_CASE("[Modules][Haxe] secondary types complete their own members") {
 	SourceDirScope scope(dir);
 
 	// `Maina.` inside the file that declares it: this is a class reference, so
-	// only the members Haxe allows there (statics) are offered, not the
+	// only the members Haxe allows there (statistics) are offered, not the
 	// instance method `whisper`.
 	const HashSet<String> members = completion_names(
 			"package game;\n"
@@ -637,6 +637,11 @@ TEST_CASE("[Modules][Haxe] exported members are inherited from base scripts") {
 	remove_scratch_dir(dir);
 }
 
+#ifdef TOOLS_ENABLED
+/* The placeholder instance is what the Inspector shows for a script whose
+ * library has not been compiled yet; `placeholder_instance_create()` returns
+ * `nullptr` outside an editor build, so the refresh-through-placeholder
+ * behavior can only be exercised here. */
 TEST_CASE("[Modules][Haxe] a base script change refreshes dependent scripts") {
 	const String dir = make_scratch_dir();
 	(void)write_source(dir.path_join("game"), "Base.hx",
@@ -707,6 +712,7 @@ TEST_CASE("[Modules][Haxe] a base script change refreshes dependent scripts") {
 	memdelete(node);
 	remove_scratch_dir(dir);
 }
+#endif
 
 TEST_CASE("[Modules][Haxe] exports update when the source changes") {
 	const String dir = make_scratch_dir();
@@ -1375,7 +1381,7 @@ TEST_CASE("[Modules][Haxe] the web toolchain finds emcc through the setting, EMS
 	const String bin = dir.path_join("bin");
 	DirAccess::make_dir_recursive_absolute(bin);
 	(void)write_source(bin, "emcc", "");
-	CHECK(HaxeBuild::resolve_web_emcc(String(), "", bin + ":/usr/bin:/bin", emcc, error));
+	CHECK(HaxeBuild::resolve_web_emcc(String(), "", bin + HaxeBuild::path_list_separator() + "/usr/bin:/bin", emcc, error));
 	CHECK(emcc == bin.path_join("emcc"));
 
 	// Nothing found: the message names every source the user can configure.
@@ -1759,21 +1765,37 @@ TEST_CASE("[Modules][Haxe] a call-result receiver completes the returned type") 
 }
 
 TEST_CASE("[Modules][Haxe] the packaged library path shares the build name") {
-	// An exported game loads the library from `res://haxe/<Name>.dso`, and the
-	// build writes `<Name>.dso`; both derive `<Name>` from the project name the
+	// An exported game loads the library from `res://haxe/<Name>.<ext>`, and the
+	// build writes `<Name>.<ext>`; both derive `<Name>` from the project name the
 	// same way, so a name that is not a valid identifier must be sanitized
 	// identically in the two paths or the export would package a file the
 	// runtime never looks for.
+	//
+	// The extension is the one hxcpp's host toolchain links (`.dso` on Linux,
+	// `.dll` under MSVC, `.dylib` on macOS), so it is pinned per platform here
+	// rather than hardcoded: a build that started writing the wrong extension
+	// would still ship a file the runtime never opens.
+#if defined(WINDOWS_ENABLED)
+	const String extension = "dll";
+#elif defined(MACOS_ENABLED)
+	const String extension = "dylib";
+#else
+	const String extension = "dso";
+#endif
+
 	ProjectSettings *settings = ProjectSettings::get_singleton();
 	const bool had_name = settings->has_setting("application/config/name");
 	const Variant previous = had_name ? settings->get_setting("application/config/name") : Variant();
 
 	settings->set_setting("application/config/name", "New Game Project");
-	CHECK(HaxeProject::get_packaged_library_path() == "res://haxe/New_Game_Project.dso");
-	CHECK(HaxeProject::get_output_library_path(true, false).get_file() == "New_Game_Project.dso");
+	const String built = HaxeProject::get_output_library_path(true, false).get_file();
+	CHECK(built == "New_Game_Project." + extension);
+	// The export packages exactly the file the build produced, under
+	// `res://haxe/`, which is where the runtime looks it up.
+	CHECK(HaxeProject::get_packaged_library_path() == "res://haxe/" + built);
 
 	settings->set_setting("application/config/name", "9lives.game");
-	CHECK(HaxeProject::get_packaged_library_path() == "res://haxe/G9lives_game.dso");
+	CHECK(HaxeProject::get_packaged_library_path() == "res://haxe/G9lives_game." + extension);
 
 	if (had_name) {
 		settings->set_setting("application/config/name", previous);
@@ -1955,6 +1977,7 @@ TEST_CASE("[Modules][Haxe] editing one script does not reparse the whole project
 	remove_scratch_dir(dir);
 }
 
+#ifdef TOOLS_ENABLED
 TEST_CASE("[Modules][Haxe] an unsaved base edit refreshes inherited exports") {
 	const String dir = make_scratch_dir();
 	(void)write_source(dir.path_join("game"), "Base.hx",
@@ -2021,6 +2044,7 @@ TEST_CASE("[Modules][Haxe] an unsaved base edit refreshes inherited exports") {
 	memdelete(node);
 	remove_scratch_dir(dir);
 }
+#endif
 
 namespace {
 

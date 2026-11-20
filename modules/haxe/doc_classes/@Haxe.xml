@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="@Haxe" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Haxe metadata annotations understood by Godot.
+	</brief_description>
+	<description>
+		Haxe uses `@:` metadata where GDScript uses `@` annotations. This page lists the metadata the engine interprets; any other `@:` metadata is left untouched for the Haxe compiler, which is what validates it.
+		Godot reads these annotations out of the source as it is parsed. A class annotated with `@:tool` runs in the editor, an exported variable appears in the Inspector, and a `@:signal` function declares a signal:
+		[codeblock lang=haxe]
+		package game;
+
+		import godot.Node2D;
+
+		@:tool
+		@:globalClass
+		class Player extends Node2D {
+			@:exportGroup("Movement")
+			@:exportRange(0, 500, 1) var speed:Float = 200.0;
+
+			@:exportEnum("Idle,Walk,Run") var state:Int = 0;
+
+			@:signal function state_changed(state:Int):Void {}
+		}
+		[/codeblock]
+		Every annotation has a shorter name and a `gd`-prefixed alias (`@:export`/`@:exported`, `@:signal`/`@:gdSignal`, `@:tool`/`@:gdTool`/`@:editor`, `@:globalClass`/`@:gdGlobalClass`). Both forms are accepted, so a project can pick the one that does not clash with a name already used by a Haxe library.
+	</description>
+	<tutorials>
+	</tutorials>
+	<annotations>
+		<annotation name="@:abstract">
+			<return type="void" />
+			<description>
+				Marks the class as abstract. An abstract script is excluded from the project's boot entry and cannot be instantiated; it exists to be extended by another Haxe class.
+			</description>
+		</annotation>
+		<annotation name="@:editor">
+			<return type="void" />
+			<description>
+				Alias of [annotation @:tool].
+			</description>
+		</annotation>
+		<annotation name="@:export">
+			<return type="void" />
+			<description>
+				Exports the following variable to the Inspector as a Godot property, so its value is shown in the Inspector and saved with the scene, like `@export` in GDScript. Only instance variables become properties; a static variable cannot, because hxcpp keeps static members in the class-wide tables an instance cannot reach.
+				Any export hint ([annotation @:exportRange], [annotation @:exportEnum], [annotation @:exportFile], [annotation @:exportDir], [annotation @:exportMultiline]) implies this annotation, so a variable that carries a hint does not need `@:export` as well.
+				[codeblock lang=haxe]
+				@:export var speed:Float = 200.0;
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportDir">
+			<return type="void" />
+			<description>
+				Exports the variable with the [constant PROPERTY_HINT_DIR] hint, so the Inspector offers a directory picker. See also [constant PROPERTY_HINT_DIR].
+				[codeblock lang=haxe]
+				@:exportDir var output_folder:String = "";
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportEnum" qualifiers="vararg">
+			<return type="void" />
+			<param index="0" name="names" type="String" />
+			<description>
+				Exports the variable with the [constant PROPERTY_HINT_ENUM] hint, so the Inspector shows a drop-down list. The options may be given as one comma-separated string or as one argument per option; both [code]@:exportEnum("Idle,Run")[/code] and [code]@:exportEnum("Idle", "Run")[/code] produce the hint string [code]Idle,Run[/code].
+				[codeblock lang=haxe]
+				@:exportEnum("Idle,Walk,Run") var state:Int = 0;
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportFile" qualifiers="vararg">
+			<return type="void" />
+			<param index="0" name="filter" type="String" default="&quot;&quot;" />
+			<description>
+				Exports the variable with the [constant PROPERTY_HINT_FILE] hint, so the Inspector offers a file picker. [param filter] limits the selectable files, using the same syntax as [constant PROPERTY_HINT_FILE] (for example [code]"*.png,*.svg"[/code]); an empty filter accepts any file.
+				[codeblock lang=haxe]
+				@:exportFile("*.png") var texture_path:String = "";
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportGroup">
+			<return type="void" />
+			<param index="0" name="name" type="String" />
+			<description>
+				Starts a group in the Inspector. The annotation is written on the first variable of the group and applies until another group or subgroup is declared. It does not export the variable by itself.
+				[codeblock lang=haxe]
+				@:exportGroup("Movement")
+				@:export var speed:Float = 200.0;
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportMultiline">
+			<return type="void" />
+			<description>
+				Exports the variable with the [constant PROPERTY_HINT_MULTILINE_TEXT] hint, so a [String] property is edited as a multi-line text box.
+			</description>
+		</annotation>
+		<annotation name="@:exportRange">
+			<return type="void" />
+			<param index="0" name="min" type="float" />
+			<param index="1" name="max" type="float" />
+			<param index="2" name="step" type="float" default="1.0" />
+			<description>
+				Exports the variable with the [constant PROPERTY_HINT_RANGE] hint. [param min] and [param max] are the value range, and [param step] is the increment the Inspector uses. This is the Haxe form of GDScript's `@export_range`.
+				[codeblock lang=haxe]
+				@:exportRange(0, 500, 1) var speed:Float = 200.0;
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:exportSubgroup">
+			<return type="void" />
+			<param index="0" name="name" type="String" />
+			<description>
+				Starts a subgroup inside the current Inspector group, exactly like `@export_subgroup` in GDScript. It does not export the variable by itself.
+			</description>
+		</annotation>
+		<annotation name="@:exported">
+			<return type="void" />
+			<description>
+				Alias of [annotation @:export].
+			</description>
+		</annotation>
+		<annotation name="@:gdGlobalClass">
+			<return type="void" />
+			<description>
+				Alias of [annotation @:globalClass].
+			</description>
+		</annotation>
+		<annotation name="@:gdSignal">
+			<return type="void" />
+			<description>
+				Alias of [annotation @:signal].
+			</description>
+		</annotation>
+		<annotation name="@:gdTool">
+			<return type="void" />
+			<description>
+				Alias of [annotation @:tool].
+			</description>
+		</annotation>
+		<annotation name="@:globalClass">
+			<return type="void" />
+			<description>
+				Registers the class as a named script type, the Haxe form of `class_name` in GDScript. A global class appears in the editor's node and resource creation dialogs and can be referenced by name from other scripts and from the scene. A script without it is still attached to nodes, but has no global type name.
+			</description>
+		</annotation>
+		<annotation name="@:signal">
+			<return type="void" />
+			<description>
+				Declares a Godot signal from the function it precedes. The function name and its parameters become the signal's name and argument list, the signal is listed in the **Node → Signals** dock, and the function is no longer a callable method. It must still be a valid Haxe function, so it needs an (empty) body.
+				[codeblock lang=haxe]
+				@:signal function died(final_value:Int):Void {}
+				[/codeblock]
+			</description>
+		</annotation>
+		<annotation name="@:static">
+			<return type="void" />
+			<description>
+				Treats the following member as `static` without writing the keyword. A static variable is not exported to the Inspector.
+			</description>
+		</annotation>
+		<annotation name="@:tool">
+			<return type="void" />
+			<description>
+				Lets the class run in the editor, like `@tool` in GDScript. Only `@:tool` classes are compiled into the editor library, so a class without it runs when the project runs but not inside the editor. Its aliases are [annotation @:gdTool] and [annotation @:editor].
+			</description>
+		</annotation>
+	</annotations>
+</class>

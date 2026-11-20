@@ -677,10 +677,40 @@ void HaxeLanguage::get_public_constants(List<Pair<String, Variant>> *p_constants
 
 void HaxeLanguage::get_public_annotations(List<MethodInfo> *p_annotations) const {
 	// The annotations understood by the module. Exposed so the editor can
-	// document them alongside built-in language keywords.
-	MethodInfo export_annotation;
-	export_annotation.name = "@:export";
-	p_annotations->push_back(export_annotation);
+	// document them alongside built-in language keywords: `--doctool` turns
+	// this list into `@Haxe.xml`. Keep it in sync with the completion list in
+	// `haxe_completion.cpp` and with the argument handling in `haxe_source.cpp`
+	// (`@:exportRange` reads up to three arguments, `@:exportEnum` reads one or
+	// more, `@:exportFile` reads an optional filter).
+	p_annotations->push_back(MethodInfo("@:export"));
+	p_annotations->push_back(MethodInfo("@:exported"));
+	p_annotations->push_back(MethodInfo("@:exportGroup", PropertyInfo(Variant::STRING, "name")));
+	p_annotations->push_back(MethodInfo("@:exportSubgroup", PropertyInfo(Variant::STRING, "name")));
+
+	MethodInfo export_range("@:exportRange", PropertyInfo(Variant::FLOAT, "min"), PropertyInfo(Variant::FLOAT, "max"), PropertyInfo(Variant::FLOAT, "step"));
+	export_range.default_arguments.push_back(1.0);
+	p_annotations->push_back(export_range);
+
+	MethodInfo export_enum("@:exportEnum", PropertyInfo(Variant::STRING, "names"));
+	export_enum.flags |= METHOD_FLAG_VARARG;
+	p_annotations->push_back(export_enum);
+
+	MethodInfo export_file("@:exportFile", PropertyInfo(Variant::STRING, "filter"));
+	export_file.default_arguments.push_back(String(""));
+	export_file.flags |= METHOD_FLAG_VARARG;
+	p_annotations->push_back(export_file);
+
+	p_annotations->push_back(MethodInfo("@:exportDir"));
+	p_annotations->push_back(MethodInfo("@:exportMultiline"));
+	p_annotations->push_back(MethodInfo("@:signal"));
+	p_annotations->push_back(MethodInfo("@:gdSignal"));
+	p_annotations->push_back(MethodInfo("@:tool"));
+	p_annotations->push_back(MethodInfo("@:gdTool"));
+	p_annotations->push_back(MethodInfo("@:editor"));
+	p_annotations->push_back(MethodInfo("@:abstract"));
+	p_annotations->push_back(MethodInfo("@:globalClass"));
+	p_annotations->push_back(MethodInfo("@:gdGlobalClass"));
+	p_annotations->push_back(MethodInfo("@:static"));
 }
 
 /* ---- Profiling --------------------------------------------------------- */

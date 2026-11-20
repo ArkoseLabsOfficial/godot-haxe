@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HaxeLanguage" inherits="ScriptLanguage" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		The [ScriptLanguage] implementation for Haxe.
+	</brief_description>
+	<description>
+		The language registered with the script server for `.hx` files. It creates Haxe scripts, provides the script templates the editor's [b]Create New → Script[/b] dialog offers, and answers the editor's language queries.
+		Code completion, lookup and validation are parser-based and run inside the engine, without an external language server; the Haxe compiler remains the authority on whether the code compiles. There is normally no reason to reference this class directly: scripts are created from the editor or with [method ResourceLoader.load].
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

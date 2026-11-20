@@ -303,7 +303,26 @@ jobs:
       - name: Generate Godot templates
         run: |
           cd platform/android/java
-          ./gradlew generateGodotTemplates
+          # Gradle resolves its plugins from Maven Central, Google Maven and
+          # the Gradle Plugin Portal while it configures the build. A brief
+          # outage of one repository fails the whole configuration with dozens
+          # of "Could not find <artifact>" errors even though the artifacts are
+          # reachable again moments later, so the command is retried before the
+          # job is failed. A real resolution error fails the same way on every
+          # attempt, so the retry cannot mask one.
+          success=no
+          for attempt in 1 2 3; do
+            if ./gradlew generateGodotTemplates; then
+              success=yes
+              break
+            fi
+            echo "::warning::generateGodotTemplates failed (attempt $attempt/3), retrying in 30s"
+            sleep 30
+          done
+          if [ "$success" != yes ]; then
+            echo "::error::generateGodotTemplates failed after 3 attempts"
+            exit 1
+          fi
           cd ../../..
           ls -l bin/
 

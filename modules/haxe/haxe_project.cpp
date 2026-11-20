@@ -64,9 +64,12 @@ Vector<String> HaxeProject::indexed_files;
 uint64_t HaxeProject::index_check_time = 0;
 static uint64_t index_rebuild_count = 0;
 bool HaxeProject::packaged_metadata_loaded = false;
-#ifdef TOOLS_ENABLED
+/* Set by the engine tests through `set_packaged_metadata_for_testing()`. It
+ * overrides the default in both directions, which is why it is not guarded by
+ * `TOOLS_ENABLED`: a `tests=yes` template build is also not an exported game,
+ * and the tests that exercise the exported-game path need to turn it back on
+ * there too. Nothing outside the tests calls the setter. */
 static bool packaged_metadata_forced = false;
-#endif
 
 static String absolute_project_path(const String &p_setting, const String &p_default) {
 	String path = GLOBAL_GET(p_setting);
@@ -81,7 +84,7 @@ static String absolute_project_path(const String &p_setting, const String &p_def
 
 /* The project name reduced to characters a file name and a C identifier can
  * hold, shared by the build output and the packaged library so both agree on
- * `<Name>.dso`. */
+ * `<Name>` and only the extension differs per platform. */
 static String sanitized_project_name() {
 	String project_name = GLOBAL_GET("application/config/name");
 	if (project_name.is_empty()) {
@@ -1100,12 +1103,24 @@ String HaxeProject::get_packaged_metadata_path() {
 }
 
 bool HaxeProject::uses_packaged_metadata() {
+	if (packaged_metadata_forced) {
+		return true;
+	}
 #ifdef TOOLS_ENABLED
 	// The editor (and a project run from the editor) always has the real
 	// sources and the build directory, even when the engine was built with the
 	// editor tools. Only a template build is an exported game.
-	return packaged_metadata_forced;
+	return false;
+#elif defined(TESTS_ENABLED)
+	// `tests=yes` is what puts the engine test suite into a build; Godot's own
+	// workflows pass it to export templates too, and `--test` then runs on the
+	// template. Such a build is not an exported game: its `.hx` files are the
+	// real sources, so the tests get the source index. The packaged path is
+	// still covered, through `set_packaged_metadata_for_testing()`.
+	return false;
 #else
+	// A template without the test suite is an exported game: the sources were
+	// replaced by empty stubs and the manifest is the index.
 	return true;
 #endif
 }
@@ -1116,11 +1131,7 @@ void HaxeProject::reset_packaged_metadata_state() {
 }
 
 void HaxeProject::set_packaged_metadata_for_testing(bool p_enabled) {
-#ifdef TOOLS_ENABLED
 	packaged_metadata_forced = p_enabled;
-#else
-	(void)p_enabled;
-#endif
 }
 
 String HaxeProject::serialize_script_metadata() {

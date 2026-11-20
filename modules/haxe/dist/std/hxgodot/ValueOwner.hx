@@ -16,7 +16,7 @@ package hxgodot;
  * changed value into the level above and ends at the object.
  *
  * This is an implementation detail of the generated bindings. User code
- * should only rely on the resulting behaviour, which matches GDScript's:
+ * should only rely on the resulting behavior, which matches GDScript's:
  * `position.x = 5` updates the node.
  */
 interface ValueOwner {

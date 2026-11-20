@@ -1130,13 +1130,11 @@ Vector<String> HaxeBuild::android_compiler_defines(const String &p_abi, const St
  * whenever `emsdk_env.sh` has been sourced. */
 static String find_in_path(const String &p_name, const String &p_path) {
 #ifdef WINDOWS_ENABLED
-	const String separator = ";";
 	const Vector<String> extensions = { "", ".exe", ".bat", ".cmd" };
 #else
-	const String separator = ":";
 	const Vector<String> extensions = { "" };
 #endif
-	for (const String &element : p_path.split(separator, false)) {
+	for (const String &element : p_path.split(HaxeBuild::path_list_separator(), false)) {
 		if (element.is_empty()) {
 			continue;
 		}
@@ -1227,7 +1225,7 @@ static String web_hxcpp_config_source(bool p_threads, bool p_release) {
 	source += "<xml>\n";
 	if (!p_release) {
 		// hxcpp's Emscripten toolchain links a debug build through
-		// `-Xlinker -g` (it reuses the compiler's optimisation variable for a
+		// `-Xlinker -g` (it reuses the compiler's optimization variable for a
 		// wasm-ld option). wasm-ld has no `-g`, so the link stops with
 		// `unknown argument: -g`. Fix the variable from the `vars` section,
 		// which hxcpp parses before the toolchain, and let the `-g` flag below
@@ -1342,7 +1340,7 @@ bool HaxeBuild::resolve_web_emcc(const String &p_setting, const String &p_emsdk,
 		return false;
 	}
 
-	// hxcpp locates Emscripten through EMSDK, so honour it before PATH: an
+	// hxcpp locates Emscripten through EMSDK, so honor it before PATH: an
 	// editor launched from a desktop icon has no `emcc` on PATH even when
 	// `EMSDK` is exported.
 	const String emsdk = p_emsdk.strip_edges();
@@ -1398,21 +1396,24 @@ String HaxeBuild::web_toolchain_identity(const String &p_emcc) {
 	return vformat("%s:%d", p_emcc, (int64_t)FileAccess::get_modified_time(p_emcc));
 }
 
+String HaxeBuild::path_list_separator() {
+#ifdef WINDOWS_ENABLED
+	return ";";
+#else
+	return ":";
+#endif
+}
+
 Vector<Pair<String, String>> HaxeBuild::web_toolchain_environment(const String &p_emcc) {
 	Vector<Pair<String, String>> environment;
 	const String directory = p_emcc.get_base_dir();
 	if (directory.is_empty()) {
 		return environment;
 	}
-#ifdef WINDOWS_ENABLED
-	const String separator = ";";
-#else
-	const String separator = ":";
-#endif
 	// hxcpp runs `emcc`, `emar` and `emranlib` from its own PATH, so the
 	// directory of the selected executable has to come first. This is what
 	// sourcing emsdk_env.sh does for an interactive shell.
-	environment.push_back(Pair<String, String>("PATH", directory + separator + OS::get_singleton()->get_environment("PATH")));
+	environment.push_back(Pair<String, String>("PATH", directory + path_list_separator() + OS::get_singleton()->get_environment("PATH")));
 	const String emsdk_root = emsdk_root_for(p_emcc);
 	if (!emsdk_root.is_empty()) {
 		// hxcpp prepends `$EMSDK` itself, so an inherited value pointing at a

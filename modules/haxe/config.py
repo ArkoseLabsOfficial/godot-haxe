@@ -38,7 +38,16 @@ def is_enabled():
 
 
 def get_doc_classes():
-    return []
+    # The classes the module registers with ClassDB. `--doctool` documents every
+    # exposed class, so their XML has to live somewhere; without this list the
+    # generator would create them under `doc/classes/` and the class-reference
+    # check would fail on files the module, not the engine, owns.
+    return [
+        "@Haxe",
+        "HaxeLanguage",
+        "HaxeScript",
+        "HaxeSyntaxHighlighter",
+    ]
 
 
 def get_doc_path():

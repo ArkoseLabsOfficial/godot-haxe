@@ -1277,9 +1277,9 @@ Error haxe_complete_code(const String &p_code, const String &p_path, Object *p_o
 		ResolvedType owner = resolve_receiver(context, p_path, locals, is_static);
 		if (owner.valid) {
 			/* A class reference (`godot.Object.`, `MyClass.`) only gets the
-			 * members Haxe allows there: statics, constants and enum values.
-			 * Instance members, including engine methods such as `call()` or
-			 * `callv()`, only make sense after an instance. */
+			 * members Haxe allows there: static members, constants and enum
+			 * values. Instance members, including engine methods such as
+			 * `call()` or `callv()`, only make sense after an instance. */
 			add_member_options(context, owner, is_static, !is_static, r_options);
 		}
 		if (r_options->is_empty()) {

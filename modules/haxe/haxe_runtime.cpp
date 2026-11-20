@@ -1092,7 +1092,7 @@ HaxeLibrary *HaxeLibrary::load(const String &p_path, String &r_error) {
 	}
 
 	library->info = String::utf8(library->fn_library_info ? library->fn_library_info() : "");
-	#ifdef WEB_ENABLED
+#ifdef WEB_ENABLED
 	// The module is fetched by the browser; it is not a file the engine's file
 	// system can stat, and the stamp is only used to detect that a library file
 	// changed on disk.

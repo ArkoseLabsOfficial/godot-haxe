@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="HaxeScript" inherits="Script" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A script written in Haxe.
+	</brief_description>
+	<description>
+		Every `.hx` file in the project is loaded as a [HaxeScript]. The file is compiled by hxcpp into the project library, and the class it declares is attached to a node like any other script. The class extends a Godot class, either directly, through another project Haxe script, or through the generated `godot.*` bindings:
+		[codeblock lang=haxe]
+		package game;
+
+		import godot.Node2D;
+
+		class Player extends Node2D {
+			@:export var speed:Float = 200.0;
+
+			override public function _ready():Void {
+				position = new godot.Vector2(10, 10);
+			}
+		}
+		[/codeblock]
+		Members are exposed to the Inspector with `@:export`, a class runs in the editor with `@:tool`, and a [code]@:signal[/code] function declares a Godot signal. A Haxe script cannot be embedded in a scene or resource: hxcpp compiles it ahead of time, so a script is always a standalone file with a path.
+		[b]Note:[/b] The script is compiled as part of the project's Haxe library. A script that was only just edited reports its parsed members to the editor, but the new code runs after the library is rebuilt (running the project builds the game library).
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="load_source_code">
+			<return type="int" enum="Error" />
+			<param index="0" name="path" type="String" />
+			<description>
+				Reads the Haxe source at [param path] and parses it. Returns [constant OK] when the file was read and its native base class could be resolved, [constant ERR_CANT_OPEN] when the file cannot be opened, or another error code when the source does not parse. The exported members and the native base class are updated from the new source.
+				The script loader calls this automatically when the script's path is set; calling it by hand re-reads the file after an external change.
+			</description>
+		</method>
+	</methods>
+</class>
