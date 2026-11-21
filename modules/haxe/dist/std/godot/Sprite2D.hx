@@ -150,6 +150,18 @@ class Sprite2D extends godot.Node2D {
 	public function get_rect():godot.Rect2 {
 		return cast Native.call(__hxgodotId, "get_rect", []);
 	}
+
+	/** `frame_changed` signal. */
+	public var frame_changed(get, never):godot.Signal;
+	@:noCompletion function get_frame_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_changed");
+	}
 	@:keep public static inline var SIGNAL_FRAME_CHANGED:String = "frame_changed";
+
+	/** `texture_changed` signal. */
+	public var texture_changed(get, never):godot.Signal;
+	@:noCompletion function get_texture_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "texture_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXTURE_CHANGED:String = "texture_changed";
 }

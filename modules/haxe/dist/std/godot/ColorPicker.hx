@@ -192,8 +192,26 @@ class ColorPicker extends godot.VBoxContainer {
 	public function get_recent_presets():godot.PackedColorArray {
 		return cast Native.call(__hxgodotId, "get_recent_presets", []);
 	}
+
+	/** `color_changed` signal. */
+	public var color_changed(get, never):godot.Signal;
+	@:noCompletion function get_color_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "color_changed");
+	}
 	@:keep public static inline var SIGNAL_COLOR_CHANGED:String = "color_changed";
+
+	/** `preset_added` signal. */
+	public var preset_added(get, never):godot.Signal;
+	@:noCompletion function get_preset_added():godot.Signal {
+		return godot.Signal.fromObject(this, "preset_added");
+	}
 	@:keep public static inline var SIGNAL_PRESET_ADDED:String = "preset_added";
+
+	/** `preset_removed` signal. */
+	public var preset_removed(get, never):godot.Signal;
+	@:noCompletion function get_preset_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "preset_removed");
+	}
 	@:keep public static inline var SIGNAL_PRESET_REMOVED:String = "preset_removed";
 	@:keep public static var MODE_RGB:Int = 0;
 	@:keep public static var MODE_HSV:Int = 1;

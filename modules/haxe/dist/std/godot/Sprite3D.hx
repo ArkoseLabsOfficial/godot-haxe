@@ -80,6 +80,18 @@ class Sprite3D extends godot.SpriteBase3D {
 	public function is_region_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_region_enabled", []);
 	}
+
+	/** `frame_changed` signal. */
+	public var frame_changed(get, never):godot.Signal;
+	@:noCompletion function get_frame_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_changed");
+	}
 	@:keep public static inline var SIGNAL_FRAME_CHANGED:String = "frame_changed";
+
+	/** `texture_changed` signal. */
+	public var texture_changed(get, never):godot.Signal;
+	@:noCompletion function get_texture_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "texture_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXTURE_CHANGED:String = "texture_changed";
 }

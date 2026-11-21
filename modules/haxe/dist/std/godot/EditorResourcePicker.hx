@@ -70,6 +70,18 @@ class EditorResourcePicker extends godot.HBoxContainer {
 	public function is_editable():Bool {
 		return cast Native.call(__hxgodotId, "is_editable", []);
 	}
+
+	/** `resource_selected` signal. */
+	public var resource_selected(get, never):godot.Signal;
+	@:noCompletion function get_resource_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_selected");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_SELECTED:String = "resource_selected";
+
+	/** `resource_changed` signal. */
+	public var resource_changed(get, never):godot.Signal;
+	@:noCompletion function get_resource_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_changed");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_CHANGED:String = "resource_changed";
 }

@@ -177,6 +177,8 @@ public:
 	static int host_variant_call_mutating(const HxValue *p_target, const char *p_method, const HxValue *p_args, int p_argc, HxValue *r_ret, HxValue *r_updated);
 	static int host_value_equal(const HxValue *p_a, const HxValue *p_b, int *r_equal);
 	static int host_value_compare(const HxValue *p_a, const HxValue *p_b, int *r_compare);
+	static int host_update_texture(int64_t p_texture, const void *p_pixels, int64_t p_size, int p_width, int p_height, int p_format);
+	static int host_push_audio_frames(int64_t p_playback, const void *p_samples, int p_frames, int p_channels);
 
 	/* Library whose code is currently running on this thread. Values that only
 	 * make sense in the context of a library (Haxe closures, for example)

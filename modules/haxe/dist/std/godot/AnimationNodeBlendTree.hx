@@ -34,7 +34,7 @@ class AnimationNodeBlendTree extends godot.AnimationRootNode {
 		Native.call(__hxgodotId, "add_node", [name, node, __position]);
 	}
 
-	public function get_node(name:String):godot.AnimationNode {
+	public function get_node<T:AnimationNode>(name:String, ?__type:Class<T>):T {
 		return cast Native.call(__hxgodotId, "get_node", [name]);
 	}
 
@@ -68,6 +68,12 @@ class AnimationNodeBlendTree extends godot.AnimationRootNode {
 
 	public function get_node_position(name:String):godot.Vector2 {
 		return cast Native.call(__hxgodotId, "get_node_position", [name]);
+	}
+
+	/** `node_changed` signal. */
+	public var node_changed(get, never):godot.Signal;
+	@:noCompletion function get_node_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "node_changed");
 	}
 	@:keep public static inline var SIGNAL_NODE_CHANGED:String = "node_changed";
 }

@@ -45,8 +45,32 @@ class EditorDebuggerSession extends godot.RefCounted {
 	public function set_breakpoint(path:String, line:Int, enabled:Bool):Void {
 		Native.call(__hxgodotId, "set_breakpoint", [path, line, enabled]);
 	}
+
+	/** `started` signal. */
+	public var started(get, never):godot.Signal;
+	@:noCompletion function get_started():godot.Signal {
+		return godot.Signal.fromObject(this, "started");
+	}
 	@:keep public static inline var SIGNAL_STARTED:String = "started";
+
+	/** `stopped` signal. */
+	public var stopped(get, never):godot.Signal;
+	@:noCompletion function get_stopped():godot.Signal {
+		return godot.Signal.fromObject(this, "stopped");
+	}
 	@:keep public static inline var SIGNAL_STOPPED:String = "stopped";
+
+	/** `breaked` signal. */
+	public var breaked(get, never):godot.Signal;
+	@:noCompletion function get_breaked():godot.Signal {
+		return godot.Signal.fromObject(this, "breaked");
+	}
 	@:keep public static inline var SIGNAL_BREAKED:String = "breaked";
+
+	/** `continued` signal. */
+	public var continued(get, never):godot.Signal;
+	@:noCompletion function get_continued():godot.Signal {
+		return godot.Signal.fromObject(this, "continued");
+	}
 	@:keep public static inline var SIGNAL_CONTINUED:String = "continued";
 }

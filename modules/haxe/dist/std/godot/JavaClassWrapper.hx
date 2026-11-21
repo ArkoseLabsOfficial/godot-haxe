@@ -17,6 +17,12 @@ class JavaClassWrapper extends godot.Object {
 		return cast Native.singleton("JavaClassWrapper");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.JavaClassWrapper;
+	@:noCompletion static function get_singleton():godot.JavaClassWrapper {
+		return cast Native.singleton("JavaClassWrapper");
+	}
+
 	public function wrap(name:String):godot.JavaClass {
 		return cast Native.call(__hxgodotId, "wrap", [name]);
 	}

@@ -58,6 +58,18 @@ class MultiplayerSpawner extends godot.Node {
 	public function spawn(?data:Dynamic):godot.Node {
 		return cast Native.call(__hxgodotId, "spawn", [data]);
 	}
+
+	/** `despawned` signal. */
+	public var despawned(get, never):godot.Signal;
+	@:noCompletion function get_despawned():godot.Signal {
+		return godot.Signal.fromObject(this, "despawned");
+	}
 	@:keep public static inline var SIGNAL_DESPAWNED:String = "despawned";
+
+	/** `spawned` signal. */
+	public var spawned(get, never):godot.Signal;
+	@:noCompletion function get_spawned():godot.Signal {
+		return godot.Signal.fromObject(this, "spawned");
+	}
 	@:keep public static inline var SIGNAL_SPAWNED:String = "spawned";
 }

@@ -250,6 +250,12 @@ EditorHTTPServer::EditorHTTPServer() {
 	mimes["png"] = "image/png";
 	mimes["svg"] = "image/svg";
 	mimes["wasm"] = "application/wasm";
+	// A Haxe project compiles to a WebAssembly side module that is fetched as
+	// `<project>.so`. Without an entry a remote deploy served the file with the
+	// fallback content type (or none), the browser refused it and the game hung
+	// on `wasm-instantiate`. The file is a wasm module, so it is announced as
+	// one.
+	mimes["so"] = "application/wasm";
 	server.instantiate();
 	stop();
 }

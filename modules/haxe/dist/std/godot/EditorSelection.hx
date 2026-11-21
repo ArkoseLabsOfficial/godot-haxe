@@ -35,5 +35,11 @@ class EditorSelection extends godot.Object {
 	public function get_transformable_selected_nodes():Array<godot.Node> {
 		return cast Native.call(__hxgodotId, "get_transformable_selected_nodes", []);
 	}
+
+	/** `selection_changed` signal. */
+	public var selection_changed(get, never):godot.Signal;
+	@:noCompletion function get_selection_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "selection_changed");
+	}
 	@:keep public static inline var SIGNAL_SELECTION_CHANGED:String = "selection_changed";
 }

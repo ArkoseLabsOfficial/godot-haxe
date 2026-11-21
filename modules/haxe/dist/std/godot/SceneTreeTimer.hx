@@ -20,5 +20,11 @@ class SceneTreeTimer extends godot.RefCounted {
 		Native.call(__hxgodotId, "set_time_left", [value]);
 		return value;
 	}
+
+	/** `timeout` signal. */
+	public var timeout(get, never):godot.Signal;
+	@:noCompletion function get_timeout():godot.Signal {
+		return godot.Signal.fromObject(this, "timeout");
+	}
 	@:keep public static inline var SIGNAL_TIMEOUT:String = "timeout";
 }

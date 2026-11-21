@@ -17,6 +17,12 @@ class DisplayServer extends godot.Object {
 		return cast Native.singleton("DisplayServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.DisplayServer;
+	@:noCompletion static function get_singleton():godot.DisplayServer {
+		return cast Native.singleton("DisplayServer");
+	}
+
 	@:keep public static var INVALID_SCREEN:Int = -1;
 	@:keep public static var SCREEN_WITH_MOUSE_FOCUS:Int = -4;
 	@:keep public static var SCREEN_WITH_KEYBOARD_FOCUS:Int = -3;
@@ -1188,6 +1194,12 @@ class DisplayServer extends godot.Object {
 
 	public function pip_mode_set_auto_enter_on_background(auto_enter_on_background:Bool, window_id:Int = 0):Void {
 		Native.call(__hxgodotId, "pip_mode_set_auto_enter_on_background", [auto_enter_on_background, window_id]);
+	}
+
+	/** `orientation_changed` signal. */
+	public var orientation_changed(get, never):godot.Signal;
+	@:noCompletion function get_orientation_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "orientation_changed");
 	}
 	@:keep public static inline var SIGNAL_ORIENTATION_CHANGED:String = "orientation_changed";
 	@:keep public static var FEATURE_GLOBAL_MENU:Int = 0;

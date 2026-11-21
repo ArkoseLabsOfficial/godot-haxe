@@ -17,6 +17,12 @@ class NavigationServer3DManager extends godot.Object {
 		return cast Native.singleton("NavigationServer3DManager");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.NavigationServer3DManager;
+	@:noCompletion static function get_singleton():godot.NavigationServer3DManager {
+		return cast Native.singleton("NavigationServer3DManager");
+	}
+
 	public function register_server(name:String, create_callback:Dynamic):Void {
 		Native.call(__hxgodotId, "register_server", [name, create_callback]);
 	}

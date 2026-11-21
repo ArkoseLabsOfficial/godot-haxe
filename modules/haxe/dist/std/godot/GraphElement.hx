@@ -86,12 +86,60 @@ class GraphElement extends godot.Container {
 	public function is_scaling_menus():Bool {
 		return cast Native.call(__hxgodotId, "is_scaling_menus", []);
 	}
+
+	/** `node_selected` signal. */
+	public var node_selected(get, never):godot.Signal;
+	@:noCompletion function get_node_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "node_selected");
+	}
 	@:keep public static inline var SIGNAL_NODE_SELECTED:String = "node_selected";
+
+	/** `node_deselected` signal. */
+	public var node_deselected(get, never):godot.Signal;
+	@:noCompletion function get_node_deselected():godot.Signal {
+		return godot.Signal.fromObject(this, "node_deselected");
+	}
 	@:keep public static inline var SIGNAL_NODE_DESELECTED:String = "node_deselected";
+
+	/** `raise_request` signal. */
+	public var raise_request(get, never):godot.Signal;
+	@:noCompletion function get_raise_request():godot.Signal {
+		return godot.Signal.fromObject(this, "raise_request");
+	}
 	@:keep public static inline var SIGNAL_RAISE_REQUEST:String = "raise_request";
+
+	/** `delete_request` signal. */
+	public var delete_request(get, never):godot.Signal;
+	@:noCompletion function get_delete_request():godot.Signal {
+		return godot.Signal.fromObject(this, "delete_request");
+	}
 	@:keep public static inline var SIGNAL_DELETE_REQUEST:String = "delete_request";
+
+	/** `resize_request` signal. */
+	public var resize_request(get, never):godot.Signal;
+	@:noCompletion function get_resize_request():godot.Signal {
+		return godot.Signal.fromObject(this, "resize_request");
+	}
 	@:keep public static inline var SIGNAL_RESIZE_REQUEST:String = "resize_request";
+
+	/** `resize_end` signal. */
+	public var resize_end(get, never):godot.Signal;
+	@:noCompletion function get_resize_end():godot.Signal {
+		return godot.Signal.fromObject(this, "resize_end");
+	}
 	@:keep public static inline var SIGNAL_RESIZE_END:String = "resize_end";
+
+	/** `dragged` signal. */
+	public var dragged(get, never):godot.Signal;
+	@:noCompletion function get_dragged():godot.Signal {
+		return godot.Signal.fromObject(this, "dragged");
+	}
 	@:keep public static inline var SIGNAL_DRAGGED:String = "dragged";
+
+	/** `position_offset_changed` signal. */
+	public var position_offset_changed(get, never):godot.Signal;
+	@:noCompletion function get_position_offset_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "position_offset_changed");
+	}
 	@:keep public static inline var SIGNAL_POSITION_OFFSET_CHANGED:String = "position_offset_changed";
 }

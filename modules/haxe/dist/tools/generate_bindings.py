@@ -85,6 +85,20 @@ MAPPED_BUILTINS = {
     "Array",
 }
 
+# Engine methods that take a path and return a broad engine class. They are
+# emitted as generic methods with a trailing `Class<T>` argument so the caller
+# can refine the result type:
+#
+#   get_node("Player")               // godot.Node
+#   get_node("Player", PlayerClass)  // PlayerClass
+#
+# Only methods whose declared return type is a concrete `godot.*` class can be
+# refined this way; the constraint is taken from that declared type.
+TYPED_ACCESSORS = {
+    "get_node",
+    "get_node_or_null",
+}
+
 # Members stored directly on the Haxe wrapper. Everything else that a built-in
 # type exposes is derived and resolved through the engine.
 PRIMARY_MEMBERS = {
@@ -1056,6 +1070,18 @@ class Generator:
             declarations.append(declaration)
             expressions.append(expression)
             prelude.extend(lines)
+        # A typed accessor (`get_node`, `get_node_or_null`) returns a broad
+        # engine class, but takes a trailing `Class<T>` argument that refines
+        # the result. Haxe has no method overloading, so the generator emits a
+        # single generic method whose type parameter defaults to the declared
+        # return type: `get_node<T:godot.Node>(path:String, ?type:Class<T>):T`.
+        # The type argument only tells the compiler and editor completion what
+        # the value is; the engine call still passes the path alone.
+        generic_parameter = None
+        constraint = return_type[len("godot.") :]
+        if name in TYPED_ACCESSORS and not is_static and return_type.startswith("godot.") and constraint in self.class_names:
+            generic_parameter = constraint
+            declarations.append("?__type:Class<T>")
         if method.get("is_vararg"):
             declarations.append("...__varArgs:Dynamic")
             prelude.append("var __args:Array<Dynamic> = [%s];" % ", ".join(expressions))
@@ -1086,7 +1112,11 @@ class Generator:
             body.append("%s;" % call if return_type == "Void" else "return cast %s;" % call)
 
         modifier = "static " if is_static else "override " if override else ""
-        lines = ["\tpublic %sfunction %s(%s):%s {" % (modifier, name, ", ".join(declarations), return_type)]
+        if generic_parameter is not None:
+            signature = "\tpublic %sfunction %s<T:%s>(%s):T {" % (modifier, name, constraint, ", ".join(declarations))
+        else:
+            signature = "\tpublic %sfunction %s(%s):%s {" % (modifier, name, ", ".join(declarations), return_type)
+        lines = [signature]
         for line in prelude:
             lines.append("\t\t" + line)
         for line in body:
@@ -1176,9 +1206,19 @@ class Generator:
 
         if cls.get("is_singleton"):
             singleton = cls.get("singleton_name") or name
+            # The engine owns these objects, so there is no `new`: they are
+            # reached through `Native.singleton`. Both a method (`instance()`)
+            # and a property (`singleton`) are emitted; the property reads like
+            # GDScript's implicit singleton access.
             out.append("")
             out.append("\t/** The engine singleton instance. */")
             out.append("\tpublic static function instance():godot.%s {" % name)
+            out.append('\t\treturn cast Native.singleton("%s");' % singleton)
+            out.append("\t}")
+            out.append("")
+            out.append("\t/** The engine singleton instance (same as `instance()`). */")
+            out.append("\tpublic static var singleton(get, never):godot.%s;" % name)
+            out.append("\t@:noCompletion static function get_singleton():godot.%s {" % name)
             out.append('\t\treturn cast Native.singleton("%s");' % singleton)
             out.append("\t}")
 
@@ -1324,7 +1364,19 @@ class Generator:
                 )
             )
 
+        # A signal is reachable both as a `Signal` value on the instance
+        # (`button_down.connect(...)`, the form the editor suggests and
+        # GDScript uses) and as the static name constant the event is emitted
+        # with (`SIGNAL_BUTTON_DOWN`). The instance member is a `get` only
+        # property: a signal cannot be assigned.
         for signal in cls.get("signals") or []:
+            signal_name = ident(signal["name"])
+            out.append("")
+            out.append("\t/** `%s` signal. */" % signal["name"])
+            out.append("\tpublic var %s(get, never):godot.Signal;" % signal_name)
+            out.append("\t@:noCompletion function get_%s():godot.Signal {" % signal_name)
+            out.append('\t\treturn godot.Signal.fromObject(this, "%s");' % signal["name"])
+            out.append("\t}")
             out.append(
                 '\t@:keep public static inline var SIGNAL_%s:String = "%s";' % (signal["name"].upper(), signal["name"])
             )

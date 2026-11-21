@@ -105,6 +105,18 @@ class NavigationRegion3D extends godot.Node3D {
 	public function get_bounds():godot.AABB {
 		return cast Native.call(__hxgodotId, "get_bounds", []);
 	}
+
+	/** `navigation_mesh_changed` signal. */
+	public var navigation_mesh_changed(get, never):godot.Signal;
+	@:noCompletion function get_navigation_mesh_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "navigation_mesh_changed");
+	}
 	@:keep public static inline var SIGNAL_NAVIGATION_MESH_CHANGED:String = "navigation_mesh_changed";
+
+	/** `bake_finished` signal. */
+	public var bake_finished(get, never):godot.Signal;
+	@:noCompletion function get_bake_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "bake_finished");
+	}
 	@:keep public static inline var SIGNAL_BAKE_FINISHED:String = "bake_finished";
 }

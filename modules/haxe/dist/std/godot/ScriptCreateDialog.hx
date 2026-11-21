@@ -15,5 +15,11 @@ class ScriptCreateDialog extends godot.ConfirmationDialog {
 	public function config(inherits:String, path:String, built_in_enabled:Bool = true, load_enabled:Bool = true):Void {
 		Native.call(__hxgodotId, "config", [inherits, path, built_in_enabled, load_enabled]);
 	}
+
+	/** `script_created` signal. */
+	public var script_created(get, never):godot.Signal;
+	@:noCompletion function get_script_created():godot.Signal {
+		return godot.Signal.fromObject(this, "script_created");
+	}
 	@:keep public static inline var SIGNAL_SCRIPT_CREATED:String = "script_created";
 }

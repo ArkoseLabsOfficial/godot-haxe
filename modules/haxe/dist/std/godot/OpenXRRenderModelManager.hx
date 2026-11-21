@@ -29,7 +29,19 @@ class OpenXRRenderModelManager extends godot.Node3D {
 		Native.call(__hxgodotId, "set_make_local_to_pose", [value]);
 		return value;
 	}
+
+	/** `render_model_added` signal. */
+	public var render_model_added(get, never):godot.Signal;
+	@:noCompletion function get_render_model_added():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_added");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_ADDED:String = "render_model_added";
+
+	/** `render_model_removed` signal. */
+	public var render_model_removed(get, never):godot.Signal;
+	@:noCompletion function get_render_model_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_removed");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_REMOVED:String = "render_model_removed";
 	@:keep public static var RENDER_MODEL_TRACKER_ANY:Int = 0;
 	@:keep public static var RENDER_MODEL_TRACKER_NONE_SET:Int = 1;

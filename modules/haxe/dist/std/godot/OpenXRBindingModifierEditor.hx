@@ -19,5 +19,11 @@ class OpenXRBindingModifierEditor extends godot.PanelContainer {
 	public function setup(action_map:godot.OpenXRActionMap, binding_modifier:godot.OpenXRBindingModifier):Void {
 		Native.call(__hxgodotId, "setup", [action_map, binding_modifier]);
 	}
+
+	/** `binding_modifier_removed` signal. */
+	public var binding_modifier_removed(get, never):godot.Signal;
+	@:noCompletion function get_binding_modifier_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "binding_modifier_removed");
+	}
 	@:keep public static inline var SIGNAL_BINDING_MODIFIER_REMOVED:String = "binding_modifier_removed";
 }

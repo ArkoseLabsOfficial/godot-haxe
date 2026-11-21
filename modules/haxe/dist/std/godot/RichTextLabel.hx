@@ -684,9 +684,33 @@ class RichTextLabel extends godot.Control {
 	public function menu_option(option:Int):Void {
 		Native.call(__hxgodotId, "menu_option", [option]);
 	}
+
+	/** `meta_clicked` signal. */
+	public var meta_clicked(get, never):godot.Signal;
+	@:noCompletion function get_meta_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "meta_clicked");
+	}
 	@:keep public static inline var SIGNAL_META_CLICKED:String = "meta_clicked";
+
+	/** `meta_hover_started` signal. */
+	public var meta_hover_started(get, never):godot.Signal;
+	@:noCompletion function get_meta_hover_started():godot.Signal {
+		return godot.Signal.fromObject(this, "meta_hover_started");
+	}
 	@:keep public static inline var SIGNAL_META_HOVER_STARTED:String = "meta_hover_started";
+
+	/** `meta_hover_ended` signal. */
+	public var meta_hover_ended(get, never):godot.Signal;
+	@:noCompletion function get_meta_hover_ended():godot.Signal {
+		return godot.Signal.fromObject(this, "meta_hover_ended");
+	}
 	@:keep public static inline var SIGNAL_META_HOVER_ENDED:String = "meta_hover_ended";
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 	@:keep public static var LIST_NUMBERS:Int = 0;
 	@:keep public static var LIST_LETTERS:Int = 1;

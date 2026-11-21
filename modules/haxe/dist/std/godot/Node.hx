@@ -263,11 +263,11 @@ class Node extends godot.Object {
 		return cast Native.call(__hxgodotId, "has_node", [path]);
 	}
 
-	public function get_node(path:String):godot.Node {
+	public function get_node<T:Node>(path:String, ?__type:Class<T>):T {
 		return cast Native.call(__hxgodotId, "get_node", [path]);
 	}
 
-	public function get_node_or_null(path:String):godot.Node {
+	public function get_node_or_null<T:Node>(path:String, ?__type:Class<T>):T {
 		return cast Native.call(__hxgodotId, "get_node_or_null", [path]);
 	}
 
@@ -619,16 +619,82 @@ class Node extends godot.Object {
 	public function notify_thread_safe(what:Int):Void {
 		Native.call(__hxgodotId, "notify_thread_safe", [what]);
 	}
+
+	/** `ready` signal. */
+	public var ready(get, never):godot.Signal;
+	@:noCompletion function get_ready():godot.Signal {
+		return godot.Signal.fromObject(this, "ready");
+	}
 	@:keep public static inline var SIGNAL_READY:String = "ready";
+
+	/** `renamed` signal. */
+	public var renamed(get, never):godot.Signal;
+	@:noCompletion function get_renamed():godot.Signal {
+		return godot.Signal.fromObject(this, "renamed");
+	}
 	@:keep public static inline var SIGNAL_RENAMED:String = "renamed";
+
+	/** `tree_entered` signal. */
+	public var tree_entered(get, never):godot.Signal;
+	@:noCompletion function get_tree_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_entered");
+	}
 	@:keep public static inline var SIGNAL_TREE_ENTERED:String = "tree_entered";
+
+	/** `tree_exiting` signal. */
+	public var tree_exiting(get, never):godot.Signal;
+	@:noCompletion function get_tree_exiting():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_exiting");
+	}
 	@:keep public static inline var SIGNAL_TREE_EXITING:String = "tree_exiting";
+
+	/** `tree_exited` signal. */
+	public var tree_exited(get, never):godot.Signal;
+	@:noCompletion function get_tree_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_exited");
+	}
 	@:keep public static inline var SIGNAL_TREE_EXITED:String = "tree_exited";
+
+	/** `child_entered_tree` signal. */
+	public var child_entered_tree(get, never):godot.Signal;
+	@:noCompletion function get_child_entered_tree():godot.Signal {
+		return godot.Signal.fromObject(this, "child_entered_tree");
+	}
 	@:keep public static inline var SIGNAL_CHILD_ENTERED_TREE:String = "child_entered_tree";
+
+	/** `child_exiting_tree` signal. */
+	public var child_exiting_tree(get, never):godot.Signal;
+	@:noCompletion function get_child_exiting_tree():godot.Signal {
+		return godot.Signal.fromObject(this, "child_exiting_tree");
+	}
 	@:keep public static inline var SIGNAL_CHILD_EXITING_TREE:String = "child_exiting_tree";
+
+	/** `child_order_changed` signal. */
+	public var child_order_changed(get, never):godot.Signal;
+	@:noCompletion function get_child_order_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "child_order_changed");
+	}
 	@:keep public static inline var SIGNAL_CHILD_ORDER_CHANGED:String = "child_order_changed";
+
+	/** `replacing_by` signal. */
+	public var replacing_by(get, never):godot.Signal;
+	@:noCompletion function get_replacing_by():godot.Signal {
+		return godot.Signal.fromObject(this, "replacing_by");
+	}
 	@:keep public static inline var SIGNAL_REPLACING_BY:String = "replacing_by";
+
+	/** `editor_description_changed` signal. */
+	public var editor_description_changed(get, never):godot.Signal;
+	@:noCompletion function get_editor_description_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "editor_description_changed");
+	}
 	@:keep public static inline var SIGNAL_EDITOR_DESCRIPTION_CHANGED:String = "editor_description_changed";
+
+	/** `editor_state_changed` signal. */
+	public var editor_state_changed(get, never):godot.Signal;
+	@:noCompletion function get_editor_state_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "editor_state_changed");
+	}
 	@:keep public static inline var SIGNAL_EDITOR_STATE_CHANGED:String = "editor_state_changed";
 	@:keep public static var PROCESS_MODE_INHERIT:Int = 0;
 	@:keep public static var PROCESS_MODE_PAUSABLE:Int = 1;

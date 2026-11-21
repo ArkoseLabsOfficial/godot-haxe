@@ -55,5 +55,11 @@ class StatusIndicator extends godot.Node {
 	public function get_rect():godot.Rect2 {
 		return cast Native.call(__hxgodotId, "get_rect", []);
 	}
+
+	/** `pressed` signal. */
+	public var pressed(get, never):godot.Signal;
+	@:noCompletion function get_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pressed");
+	}
 	@:keep public static inline var SIGNAL_PRESSED:String = "pressed";
 }

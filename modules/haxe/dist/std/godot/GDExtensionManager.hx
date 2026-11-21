@@ -17,6 +17,12 @@ class GDExtensionManager extends godot.Object {
 		return cast Native.singleton("GDExtensionManager");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.GDExtensionManager;
+	@:noCompletion static function get_singleton():godot.GDExtensionManager {
+		return cast Native.singleton("GDExtensionManager");
+	}
+
 	public function load_extension(path:String):Int {
 		return cast Native.call(__hxgodotId, "load_extension", [path]);
 	}
@@ -44,8 +50,26 @@ class GDExtensionManager extends godot.Object {
 	public function get_extension(path:String):godot.GDExtension {
 		return cast Native.call(__hxgodotId, "get_extension", [path]);
 	}
+
+	/** `extensions_reloaded` signal. */
+	public var extensions_reloaded(get, never):godot.Signal;
+	@:noCompletion function get_extensions_reloaded():godot.Signal {
+		return godot.Signal.fromObject(this, "extensions_reloaded");
+	}
 	@:keep public static inline var SIGNAL_EXTENSIONS_RELOADED:String = "extensions_reloaded";
+
+	/** `extension_loaded` signal. */
+	public var extension_loaded(get, never):godot.Signal;
+	@:noCompletion function get_extension_loaded():godot.Signal {
+		return godot.Signal.fromObject(this, "extension_loaded");
+	}
 	@:keep public static inline var SIGNAL_EXTENSION_LOADED:String = "extension_loaded";
+
+	/** `extension_unloading` signal. */
+	public var extension_unloading(get, never):godot.Signal;
+	@:noCompletion function get_extension_unloading():godot.Signal {
+		return godot.Signal.fromObject(this, "extension_unloading");
+	}
 	@:keep public static inline var SIGNAL_EXTENSION_UNLOADING:String = "extension_unloading";
 	@:keep public static var LOAD_STATUS_OK:Int = 0;
 	@:keep public static var LOAD_STATUS_FAILED:Int = 1;

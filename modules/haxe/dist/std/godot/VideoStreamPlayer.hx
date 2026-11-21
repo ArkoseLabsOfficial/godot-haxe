@@ -159,5 +159,11 @@ class VideoStreamPlayer extends godot.Control {
 	public function get_video_texture():godot.Texture2D {
 		return cast Native.call(__hxgodotId, "get_video_texture", []);
 	}
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 }

@@ -17,6 +17,12 @@ class NavigationServer3D extends godot.Object {
 		return cast Native.singleton("NavigationServer3D");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.NavigationServer3D;
+	@:noCompletion static function get_singleton():godot.NavigationServer3D {
+		return cast Native.singleton("NavigationServer3D");
+	}
+
 	public function get_maps():Array<godot.RID> {
 		return cast Native.call(__hxgodotId, "get_maps", []);
 	}
@@ -636,8 +642,26 @@ class NavigationServer3D extends godot.Object {
 	public function get_process_info(process_info:Int):Int {
 		return cast Native.call(__hxgodotId, "get_process_info", [process_info]);
 	}
+
+	/** `map_changed` signal. */
+	public var map_changed(get, never):godot.Signal;
+	@:noCompletion function get_map_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "map_changed");
+	}
 	@:keep public static inline var SIGNAL_MAP_CHANGED:String = "map_changed";
+
+	/** `navigation_debug_changed` signal. */
+	public var navigation_debug_changed(get, never):godot.Signal;
+	@:noCompletion function get_navigation_debug_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "navigation_debug_changed");
+	}
 	@:keep public static inline var SIGNAL_NAVIGATION_DEBUG_CHANGED:String = "navigation_debug_changed";
+
+	/** `avoidance_debug_changed` signal. */
+	public var avoidance_debug_changed(get, never):godot.Signal;
+	@:noCompletion function get_avoidance_debug_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "avoidance_debug_changed");
+	}
 	@:keep public static inline var SIGNAL_AVOIDANCE_DEBUG_CHANGED:String = "avoidance_debug_changed";
 	@:keep public static var INFO_ACTIVE_MAPS:Int = 0;
 	@:keep public static var INFO_REGION_COUNT:Int = 1;

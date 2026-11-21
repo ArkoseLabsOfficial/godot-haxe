@@ -211,6 +211,29 @@ Array HaxeApiIndex::get_declared_members(const String &p_name) {
 		member["owner"] = p_name;
 		result.push_back(member);
 	}
+	// A singleton class is not constructed with `new`: the generated bindings
+	// expose both `instance()` and the `singleton` property, both resolving the
+	// engine-owned object through `Native.singleton`, so they are offered as
+	// static members here.
+	const String singleton_name = info.get("singleton", String());
+	if (!singleton_name.is_empty()) {
+		Dictionary instance_member;
+		instance_member["name"] = "instance";
+		instance_member["kind"] = "static_method";
+		instance_member["static"] = true;
+		instance_member["type"] = p_name;
+		instance_member["args"] = Array();
+		instance_member["owner"] = p_name;
+		result.push_back(instance_member);
+
+		Dictionary singleton_member;
+		singleton_member["name"] = "singleton";
+		singleton_member["kind"] = "static_property";
+		singleton_member["static"] = true;
+		singleton_member["type"] = p_name;
+		singleton_member["owner"] = p_name;
+		result.push_back(singleton_member);
+	}
 	Dictionary enums = info.get("enums", Dictionary());
 	for (const KeyValue<Variant, Variant> &entry : enums) {
 		Dictionary member;

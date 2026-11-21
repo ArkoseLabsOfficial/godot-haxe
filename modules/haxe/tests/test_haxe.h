@@ -32,8 +32,12 @@
 
 #include "../haxe_build.h"
 #include "../haxe_completion.h"
+#include "../haxe_elf.h"
+#include "../haxe_gdscript.h"
 #include "../haxe_language.h"
+#include "../haxe_library_index.h"
 #include "../haxe_project.h"
+#include "../haxe_runtime.h"
 #include "../haxe_script.h"
 #include "../haxe_source.h"
 #include "../haxe_stdlib.h"
@@ -50,6 +54,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
+#include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "core/object/script_language.h"
 #include "core/templates/hash_set.h"
@@ -194,12 +199,71 @@ TEST_CASE("[Modules][Haxe] a helper file is not reported as a broken script") {
 	CHECK(language->validate(FileAccess::get_file_as_string(library_path), library_path, &functions, &library_errors, nullptr, nullptr));
 	CHECK(library_errors.is_empty());
 
+	// Validation accepting the file is not enough: the editor loads it as a
+	// `Script` resource, so `load_source_code` has to succeed too. A class that
+	// does not reach a Godot type loads and can be edited, but it is not a
+	// script that can be attached or instantiated.
+	Ref<HaxeScript> helpers;
+	helpers.instantiate();
+	REQUIRE(helpers->load_source_code(helpers_path) == OK);
+	CHECK_FALSE(helpers->is_valid());
+	CHECK_FALSE(helpers->can_instantiate());
+
+	Ref<HaxeScript> library;
+	library.instantiate();
+	REQUIRE(library->load_source_code(library_path) == OK);
+	CHECK_FALSE(library->is_valid());
+	CHECK_FALSE(library->can_instantiate());
+
 	// An embedded script has no file to compile, so it is rejected with an
 	// explanation instead of the removed missing-base error.
 	List<ScriptLanguage::ScriptError> embedded_errors;
 	CHECK_FALSE(language->validate("class Embedded {\n}\n", "res://scene.tscn::HaxeScript_1", &functions, &embedded_errors, nullptr, nullptr));
 	REQUIRE_FALSE(embedded_errors.is_empty());
 	CHECK(embedded_errors.front()->get().message.contains("cannot be embedded"));
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] an empty .hx file is a valid, editable module") {
+	HaxeLanguage *language = HaxeLanguage::get_singleton();
+	REQUIRE(language != nullptr);
+
+	const String dir = make_scratch_dir();
+
+	// A file created by `touch`, by the FileSystem dock or by an external
+	// editor holds no type yet. It is a valid (if empty) Haxe module: the editor
+	// must open and edit it instead of reporting "No type declaration found.".
+	const String empty_path = write_source(dir, "Created.hx", "");
+	List<String> functions;
+	List<ScriptLanguage::ScriptError> empty_errors;
+	CHECK(language->validate("", empty_path, &functions, &empty_errors, nullptr, nullptr));
+	CHECK(empty_errors.is_empty());
+
+	Ref<HaxeScript> empty;
+	empty.instantiate();
+	REQUIRE(empty->load_source_code(empty_path) == OK);
+	CHECK(empty->is_valid());
+	// Nothing is declared yet, so there is no class to attach.
+	CHECK_FALSE(empty->can_instantiate());
+
+	// A header is the same case: `package`/`import` without a type yet.
+	const String header_path = write_source(dir, "Header.hx",
+			"package game;\n"
+			"import godot.Node2D;\n");
+	List<ScriptLanguage::ScriptError> header_errors;
+	CHECK(language->validate(FileAccess::get_file_as_string(header_path), header_path, &functions, &header_errors, nullptr, nullptr));
+	CHECK(header_errors.is_empty());
+	Ref<HaxeScript> header;
+	header.instantiate();
+	REQUIRE(header->load_source_code(header_path) == OK);
+	CHECK(header->is_valid());
+
+	// Real code without a type is still a source error, not an empty module.
+	const String broken_path = write_source(dir, "Broken.hx", "var stray = 1;\n");
+	List<ScriptLanguage::ScriptError> broken_errors;
+	CHECK_FALSE(language->validate("var stray = 1;\n", broken_path, &functions, &broken_errors, nullptr, nullptr));
+	REQUIRE_FALSE(broken_errors.is_empty());
 
 	remove_scratch_dir(dir);
 }
@@ -380,6 +444,15 @@ TEST_CASE("[Modules][Haxe] extra arguments split the option from its value") {
 	CHECK(normalized[6] == "hscript.macros.AbstractHandler.init()");
 	CHECK(normalized[7] == "--macro");
 	CHECK(normalized[8] == "x('quoted', 1)");
+}
+
+TEST_CASE("[Modules][Haxe] the boot class routes trace to the engine log") {
+	// hxcpp sends `trace()` to stdout. Rebinding `haxe.Log.trace` in the
+	// generated entry point makes a `trace()` reach the engine's output system
+	// (the editor Output panel, the game log) as well.
+	const String boot = HaxeBuild::generate_boot_class({});
+	CHECK(boot.contains("haxe.Log.trace = function"));
+	CHECK(boot.contains("hxgodot.Native.log(0, haxe.Log.formatOutput(value, infos))"));
 }
 
 TEST_CASE("[Modules][Haxe] qualified receivers complete project and engine members") {
@@ -851,6 +924,11 @@ TEST_CASE("[Modules][Haxe] @: completion offers the annotations of this module")
 	CHECK(names.has("tool"));
 	CHECK(names.has("globalClass"));
 	CHECK(names.has("exportRange"));
+	// The Haxe compiler's own metadata is offered too, so a user coming from
+	// the Haxe ecosystem finds `@:inline`, `@:keep`, ... where they expect it.
+	CHECK(names.has("inline"));
+	CHECK(names.has("deprecated"));
+	CHECK(names.has("keep"));
 	// GDScript annotations are not Haxe metadata.
 	CHECK_FALSE(names.has("onready"));
 	CHECK_FALSE(names.has("warning_ignore"));
@@ -1196,6 +1274,182 @@ TEST_CASE("[Modules][Haxe] the library list shows installed libraries haxe.json 
 	remove_scratch_dir(dir);
 }
 
+TEST_CASE("[Modules][Haxe] a library with a comma encoded name and version resolves") {
+	const String dir = make_scratch_dir();
+	// haxelib replaces the dots of a library name with commas, so `thx.core`
+	// is installed as `thx,core/`, and encodes its version directory the same
+	// way (`0.44.0` becomes `0,44,0/`). `.current` and `haxelib.json` keep the
+	// dotted form. Without converting both directions at the filesystem
+	// boundary the library looks for `thx.core/` and the compiler gets no
+	// class path.
+	const String library_root = dir.path_join("thx,core");
+	const String version_root = library_root.path_join("0,44,0");
+	(void)write_source(version_root, "haxelib.json", "{\"name\": \"thx.core\", \"classPath\": \"src\"}\n");
+	(void)write_source(library_root, ".current", "0.44.0\n");
+
+	HaxelibDirScope scope(dir);
+
+	Vector<HaxeBuild::Library> libraries;
+	HaxeBuild::list_installed_libraries(libraries);
+	REQUIRE(libraries.size() == 1);
+	// The dotted name and version are reported, the form the manifest, the
+	// compiler define and the editor use.
+	CHECK(libraries[0].name == "thx.core");
+	CHECK(libraries[0].version == "0.44.0");
+	CHECK(libraries[0].path == version_root);
+
+	Vector<String> versions;
+	HaxeBuild::list_library_versions("thx.core", versions);
+	REQUIRE(versions.size() == 1);
+	CHECK(versions[0] == "0.44.0");
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a library with a dotted version directory still resolves") {
+	// A library dropped into the repository by hand can use the dotted layout
+	// (`mylib/1.0.0/`) instead of haxelib's comma encoding. Both encodings
+	// have to resolve, otherwise the library is reported as missing.
+	const String dir = make_scratch_dir();
+	const String version_root = dir.path_join("mylib").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json", "{\"name\": \"mylib\"}\n");
+
+	HaxelibDirScope scope(dir);
+
+	Vector<HaxeBuild::Library> libraries;
+	HaxeBuild::list_installed_libraries(libraries);
+	REQUIRE(libraries.size() == 1);
+	CHECK(libraries[0].name == "mylib");
+	CHECK(libraries[0].version == "1.0.0");
+	CHECK(libraries[0].path == version_root);
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] the version list is dotted, newest first, and names dev") {
+	const String dir = make_scratch_dir();
+	// One library with two comma encoded versions, one with a single dotted
+	// version, and a hand-dropped library with no version directory.
+	const String multi = dir.path_join("multi");
+	(void)write_source(multi.path_join("1,0,0"), "haxelib.json", "{\"name\": \"multi\"}\n");
+	(void)write_source(multi.path_join("2,3,1"), "haxelib.json", "{\"name\": \"multi\"}\n");
+	(void)write_source(dir.path_join("dotted").path_join("0.9.0"), "haxelib.json", "{\"name\": \"dotted\"}\n");
+	(void)write_source(dir.path_join("hand"), "haxelib.json", "{\"name\": \"hand\"}\n");
+
+	HaxelibDirScope scope(dir);
+
+	Vector<String> versions;
+	HaxeBuild::list_library_versions("multi", versions);
+	REQUIRE(versions.size() == 2);
+	CHECK(versions[0] == "2.3.1");
+	CHECK(versions[1] == "1.0.0");
+
+	HaxeBuild::list_library_versions("dotted", versions);
+	REQUIRE(versions.size() == 1);
+	CHECK(versions[0] == "0.9.0");
+
+	HaxeBuild::list_library_versions("hand", versions);
+	REQUIRE(versions.size() == 1);
+	CHECK(versions[0] == "dev");
+
+	// A library that is not installed at all has no versions.
+	HaxeBuild::list_library_versions("missing", versions);
+	CHECK(versions.is_empty());
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] released versions are parsed from haxelib info") {
+	const String output =
+			"Name: thx.core\n"
+			"Tags: cross, utility\n"
+			"Releases:\n"
+			"  2014-08-24 04:29:15 0.5.0 : first formal release\n"
+			"  2019-11-02 21:03:00 0.44.0 : latest\n"
+			"Description:\n"
+			"  A collection of utility classes.\n";
+	const Vector<String> versions = HaxeBuild::parse_available_versions(output);
+	REQUIRE(versions.size() == 2);
+	CHECK(versions[0] == "0.5.0");
+	CHECK(versions[1] == "0.44.0");
+
+	// A library with no releases (or output that never reaches the section)
+	// yields nothing rather than a bogus entry.
+	CHECK(HaxeBuild::parse_available_versions("Name: x\n").is_empty());
+	CHECK(HaxeBuild::parse_available_versions("").is_empty());
+}
+
+TEST_CASE("[Modules][Haxe] export custom features become Haxe defines for a game build") {
+	// A project declares custom feature tags (an export preset's custom
+	// features, or the Run Instances list) and GDScript reads them with
+	// `OS.has_feature`. A Haxe `#if` has to see the same names, so every tag
+	// becomes a `-D` define for a game build. An editor build gets none of
+	// them: the tags describe the exported game, not the editor.
+	Vector<String> features;
+	features.push_back("MOBILE_BUTTONS");
+	features.push_back("my_feature");
+	HaxeBuild::set_runtime_features(features);
+
+	if (!HaxeSupport::is_available()) {
+		HaxeBuild::set_runtime_features(Vector<String>());
+		return;
+	}
+
+	const String dir = make_scratch_dir();
+	(void)write_source(dir, "Main.hx",
+			"package;\n"
+			"import godot.Node;\n"
+			"class Main extends Node {\n"
+			"}\n");
+	SourceDirScope scope(dir);
+
+	const auto has_define = [](const Vector<String> &p_arguments, const String &p_define) {
+		for (int i = 0; i + 1 < p_arguments.size(); i++) {
+			if (p_arguments[i] == "-D" && p_arguments[i + 1] == p_define) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	Vector<HaxeBuild::Library> libraries;
+	Vector<HaxeClassInfo> classes;
+	Vector<Pair<String, String>> mappings;
+	const Vector<String> game = HaxeBuild::collect_arguments(true, false, libraries, classes, mappings);
+	CHECK(has_define(game, "MOBILE_BUTTONS"));
+	CHECK(has_define(game, "my_feature"));
+
+	Vector<HaxeClassInfo> editor_classes;
+	Vector<Pair<String, String>> editor_mappings;
+	const Vector<String> editor = HaxeBuild::collect_arguments(true, true, libraries, editor_classes, editor_mappings);
+	CHECK_FALSE(has_define(editor, "MOBILE_BUTTONS"));
+	CHECK_FALSE(has_define(editor, "my_feature"));
+
+	// A run started from the editor ("Play" with a preset's or the Run
+	// Instances dialog's features) builds the game library in a *separate*
+	// process, so the setter above is not what it sees. Godot passes the
+	// features to the game process through `GODOT_EDITOR_CUSTOM_FEATURES`, and
+	// the compiler of that process has to turn them into defines as well.
+	OS::get_singleton()->set_environment("GODOT_EDITOR_CUSTOM_FEATURES", "MOBILE_BUTTONS, editor_run");
+	Vector<HaxeClassInfo> run_classes;
+	Vector<Pair<String, String>> run_mappings;
+	const Vector<String> run = HaxeBuild::collect_arguments(true, false, libraries, run_classes, run_mappings);
+	CHECK(has_define(run, "MOBILE_BUTTONS"));
+	CHECK(has_define(run, "editor_run"));
+
+	// An editor build never gets them: the tags describe the game, not the
+	// editor that is compiling it.
+	const Vector<String> run_editor = HaxeBuild::collect_arguments(true, true, libraries, run_classes, run_mappings);
+	CHECK_FALSE(has_define(run_editor, "editor_run"));
+
+	OS::get_singleton()->unset_environment("GODOT_EDITOR_CUSTOM_FEATURES");
+	const Vector<String> run_after = HaxeBuild::collect_arguments(true, false, libraries, run_classes, run_mappings);
+	CHECK_FALSE(has_define(run_after, "editor_run"));
+
+	HaxeBuild::set_runtime_features(Vector<String>());
+	remove_scratch_dir(dir);
+}
+
 TEST_CASE("[Modules][Haxe] build errors are formatted with the file and position") {
 	HaxeBuild::Result result;
 	ScriptLanguage::ScriptError located;
@@ -1318,6 +1572,53 @@ TEST_CASE("[Modules][Haxe] the toolchain glue includes hxcpp before its own head
 	// the quoted includes above the system include breaks every project build,
 	// so the order is part of the contract.
 	CHECK_MESSAGE(hxcpp < glue_header, "glue.cpp must include <hxcpp.h> before hxgodot_glue.h");
+}
+
+TEST_CASE("[Modules][Haxe] a script constructor binds its node before the body runs") {
+	if (!HaxeSupport::is_available()) {
+		return;
+	}
+	const String dir = HaxeSupport::get_dir();
+	REQUIRE_FALSE(dir.is_empty());
+
+	// A node placed in the editor already exists when its Haxe script is
+	// constructed. The generated `super()` chain has to bind that node to the
+	// wrapper before the constructor body runs, or engine calls made from
+	// `new()` (the hxvlc Video constructor writes `centered` and
+	// `texture_filter`) would target an unbound wrapper and report "the object
+	// no longer exists".
+	Ref<FileAccess> object_file = FileAccess::open(dir.path_join("std").path_join("hxgodot").path_join("NativeObject.hx"), FileAccess::READ);
+	REQUIRE(object_file.is_valid());
+	const String object_source = object_file->get_as_utf8_string();
+	const int self_lookup = object_source.find("Native.scriptSelfId(this)");
+	const int create_call = object_source.find("Native.newObject(__engineClass)");
+	REQUIRE(self_lookup >= 0);
+	REQUIRE(create_call >= 0);
+	CHECK_MESSAGE(self_lookup < create_call, "the wrapper must ask for the script object before creating a new one");
+	CHECK(object_source.find("__hxgodotId = selfId") >= 0);
+	CHECK(object_source.find("Native.bindWrapper(this, selfId)") < 0);
+
+	Ref<FileAccess> native_file = FileAccess::open(dir.path_join("std").path_join("hxgodot").path_join("Native.hx"), FileAccess::READ);
+	REQUIRE(native_file.is_valid());
+	const String native_source = native_file->get_as_utf8_string();
+	CHECK(native_source.find("\"hxgodot_haxe_script_self_id\"") >= 0);
+
+	Ref<FileAccess> header_file = FileAccess::open(dir.path_join("toolchain").path_join("hxgodot_glue.h"), FileAccess::READ);
+	REQUIRE(header_file.is_valid());
+	CHECK(header_file->get_as_utf8_string().find("String hxgodot_haxe_script_self_id(Dynamic p_wrapper);") >= 0);
+
+	Ref<FileAccess> glue_file = FileAccess::open(dir.path_join("toolchain").path_join("glue.cpp"), FileAccess::READ);
+	REQUIRE(glue_file.is_valid());
+	const String glue_source = glue_file->get_as_utf8_string();
+	CHECK(glue_source.find("String hxgodot_haxe_script_self_id(Dynamic p_wrapper)") >= 0);
+	// The id belongs to the object whose runtime class is being constructed.
+	// Matching the class is what keeps a field initializer that builds another
+	// engine object from stealing the id.
+	CHECK(glue_source.find("__GetClass().mPtr != t_script_class") >= 0);
+	// Nested construction (a constructor that attaches another script) has to
+	// restore the outer object instead of clearing the flag.
+	CHECK(glue_source.find("t_script_object_id = previous_id;") >= 0);
+	CHECK(glue_source.find("t_script_class = previous_class;") >= 0);
 }
 
 TEST_CASE("[Modules][Haxe] the web toolchain finds emcc through the setting, EMSDK or PATH") {
@@ -1744,6 +2045,137 @@ TEST_CASE("[Modules][Haxe] a call-result receiver completes the returned type") 
 	CHECK(vector.has("y"));
 
 	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a typed accessor and `cast` refine the receiver type") {
+	const String dir = make_scratch_dir();
+	const String path = write_source(dir.path_join("game"), "Main.hx",
+			"package game;\n"
+			"import godot.Node2D;\n"
+			"class Main extends Node2D {\n"
+			"}\n");
+	SourceDirScope scope(dir);
+	const String mark = String::chr(0xFFFF);
+
+	// `get_node("Path", Sprite2D)` names the value's type with a trailing class
+	// argument, the way the generated binding's `Class<T>` overload does, so the
+	// members of `Sprite2D` complete instead of the broad `Node` members.
+	const HashSet<String> typed = completion_names(
+			"package game;\n"
+			"import godot.Node2D;\n"
+			"import godot.Sprite2D;\n"
+			"class Main extends Node2D {\n"
+			"\tfunction f() {\n"
+			"\t\tget_node(\"Hero\", Sprite2D)." +
+					mark + "\n"
+						   "\t}\n"
+						   "}\n",
+			path);
+	CHECK(typed.has("texture"));
+	CHECK(typed.has("centered"));
+	CHECK(typed.has("frame"));
+
+	// `cast(value, Type)` names its type directly, here over the result of
+	// another call rather than over a plain identifier.
+	const HashSet<String> casted = completion_names(
+			"package game;\n"
+			"import godot.Node2D;\n"
+			"import godot.Sprite2D;\n"
+			"class Main extends Node2D {\n"
+			"\tfunction f() {\n"
+			"\t\tcast(get_node(\"Hero\"), Sprite2D)." +
+					mark + "\n"
+						   "\t}\n"
+						   "}\n",
+			path);
+	CHECK(casted.has("texture"));
+	CHECK(casted.has("centered"));
+	CHECK(casted.has("frame"));
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] completion resolves a class from an installed library") {
+	const String dir = make_scratch_dir();
+	// A project-local haxelib repository holding one library, in the layout
+	// `haxelib install` produces: `<repository>/<name>/<version>/haxelib.json`
+	// with the class path recorded there.
+	const String haxelib_root = dir.path_join("haxelib");
+	const String version_root = haxelib_root.path_join("mylib").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json",
+			"{\n"
+			"\t\"name\": \"mylib\",\n"
+			"\t\"classPath\": \"src\"\n"
+			"}\n");
+	const String widget_path = write_source(version_root.path_join("src").path_join("mylib"), "Widget.hx",
+			"package mylib;\n"
+			"class Widget {\n"
+			"\tpublic var label:String;\n"
+			"\tpublic var count:Int;\n"
+			"\tpublic static function create():Widget {\n"
+			"\t\treturn new Widget();\n"
+			"\t}\n"
+			"\tpublic function resize(width:Int):Void {}\n"
+			"}\n");
+
+	HaxelibDirScope scope(haxelib_root);
+	const String mark = String::chr(0xFFFF);
+
+	// The index follows the class path recorded in `haxelib.json`, not a
+	// hard coded location, and resolves a bare name when it is unambiguous.
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	REQUIRE(libraries->ensure_indexed());
+	CHECK(libraries->has_type("mylib.Widget"));
+	CHECK(libraries->has_type("Widget"));
+	HaxeClassInfo info;
+	REQUIRE(libraries->get_type_info("mylib.Widget", info));
+	CHECK(info.find_variable("label") != nullptr);
+	CHECK(info.find_function("resize") != nullptr);
+
+	// `import` completion offers the library's root package and its types.
+	const HashSet<String> roots = completion_names("import " + mark + "\n");
+	CHECK(roots.has("mylib"));
+	const HashSet<String> package = completion_names("import mylib." + mark + "\n");
+	CHECK(package.has("Widget"));
+
+	// A type position offers the library class by its full name.
+	const HashSet<String> types = completion_names(
+			"class Main {\n"
+			"\tvar w:" +
+			mark + "\n"
+				   "}\n");
+	CHECK(types.has("mylib.Widget"));
+
+	// A variable typed with the imported short name completes its instance
+	// members, without the static ones.
+	const HashSet<String> members = completion_names(
+			"import mylib.Widget;\n"
+			"class Main {\n"
+			"\tfunction f() {\n"
+			"\t\tvar w:Widget;\n"
+			"\t\tw." +
+			mark + "\n"
+				   "\t}\n"
+				   "}\n");
+	CHECK(members.has("label"));
+	CHECK(members.has("count"));
+	CHECK(members.has("resize"));
+	CHECK_FALSE(members.has("create"));
+
+	// A definition lookup jumps into the library file.
+	ScriptLanguage::LookupResult result;
+	REQUIRE(haxe_lookup_code("Widget.", "label", String(), nullptr, result) == OK);
+	CHECK(result.type == ScriptLanguage::LOOKUP_RESULT_CLASS_PROPERTY);
+	CHECK(result.script_path == widget_path);
+
+	// Refreshing the project repository drops the cached index: with the
+	// library gone its class is no longer offered. `remove_scratch_dir`
+	// deletes the tree; the index is invalidated the way the Haxelib manager
+	// does after an uninstall.
+	remove_scratch_dir(dir);
+	libraries->invalidate();
+	CHECK_FALSE(libraries->ensure_indexed());
+	CHECK_FALSE(libraries->has_type("mylib.Widget"));
 }
 
 TEST_CASE("[Modules][Haxe] the packaged library path shares the build name") {
@@ -2222,6 +2654,748 @@ TEST_CASE("[Modules][Haxe] a desktop build pins the architecture of the host") {
 		}
 	}
 	CHECK(pinned);
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a GDScript class is parsed into the shared class description") {
+	HaxeClassInfo info;
+	REQUIRE(parse_gdscript_source(
+					"class_name Hud\n"
+					"extends Node2D\n"
+					"\n"
+					"signal died\n"
+					"const MAX_HEALTH = 100\n"
+					"static var shared_count: int = 0\n"
+					"@export var health: int = 10\n"
+					"var label: String = \"x\"\n"
+					"var weights: Array[float]\n"
+					"var tail := \"a\"\n"
+					"\n"
+					"static func create_hud(p: int) -> Hud:\n"
+					"\treturn null\n"
+					"func refresh(amount: float, scale: float = 2.0, unused) -> void:\n"
+					"\tpass\n",
+					"res://hud.gd", info) == OK);
+	CHECK(info.valid);
+	CHECK(info.name == "Hud");
+	CHECK(info.base == "Node2D");
+
+	const HaxeFunctionInfo *create = info.find_function("create_hud");
+	REQUIRE(create != nullptr);
+	CHECK(create->is_static);
+	CHECK(create->return_type == "Hud");
+	REQUIRE(create->arguments.size() == 1);
+	CHECK(create->arguments[0].name == "p");
+	CHECK(create->arguments[0].type == "Int");
+	CHECK_FALSE(create->arguments[0].optional);
+
+	const HaxeFunctionInfo *refresh = info.find_function("refresh");
+	REQUIRE(refresh != nullptr);
+	CHECK_FALSE(refresh->is_static);
+	CHECK(refresh->return_type == "Void");
+	REQUIRE(refresh->arguments.size() == 3);
+	CHECK(refresh->arguments[0].type == "Float");
+	CHECK_FALSE(refresh->arguments[0].optional);
+	CHECK(refresh->arguments[1].optional);
+	CHECK(refresh->arguments[2].type == "Dynamic");
+
+	const HaxeMemberInfo *health = info.find_variable("health");
+	REQUIRE(health != nullptr);
+	CHECK(health->type == "Int");
+	CHECK(health->exported);
+	CHECK(info.find_member("health") != nullptr);
+
+	const HaxeMemberInfo *shared = info.find_variable("shared_count");
+	REQUIRE(shared != nullptr);
+	CHECK(shared->is_static);
+	CHECK(shared->type == "Int");
+	CHECK_FALSE(shared->constant);
+
+	const HaxeMemberInfo *max_health = info.find_variable("MAX_HEALTH");
+	REQUIRE(max_health != nullptr);
+	CHECK(max_health->is_static);
+	CHECK(max_health->constant);
+	CHECK(max_health->type == "Int");
+
+	const HaxeMemberInfo *weights = info.find_variable("weights");
+	REQUIRE(weights != nullptr);
+	CHECK(weights->type == "Array<Float>");
+
+	const HaxeMemberInfo *tail = info.find_variable("tail");
+	REQUIRE(tail != nullptr);
+	CHECK(tail->type == "String");
+
+	const HaxeMemberInfo *died = info.find_variable("died");
+	REQUIRE(died != nullptr);
+	CHECK(died->type == "godot.Signal");
+}
+
+TEST_CASE("[Modules][Haxe] a GDScript stub dispatches through the engine bindings") {
+	HaxeClassInfo info;
+	REQUIRE(parse_gdscript_source(
+					"class_name Hud\n"
+					"extends Node2D\n"
+					"@export var health: int = 10\n"
+					"static var shared_count: int = 0\n"
+					"const MAX_HEALTH = 100\n"
+					"static func create_hud(p: int) -> Hud:\n"
+					"\treturn null\n"
+					"func refresh(amount: float, scale: float = 2.0) -> void:\n"
+					"\tpass\n",
+					"res://hud.gd", info) == OK);
+
+	HaxeGDScriptEntry entry;
+	entry.name = "Hud";
+	entry.path = "res://hud.gd";
+	entry.declared_base = "Node2D";
+	entry.native_base = "Node2D";
+	entry.stub_base = "godot.Node2D";
+
+	HashSet<String> reserved;
+	const String stub = generate_gdscript_stub(entry, info, reserved);
+	CHECK(stub.contains("class Hud extends godot.Node2D"));
+	// Static calls go through the script resource, instance calls through the
+	// node's object id.
+	CHECK(stub.contains("static function create_hud(p:Int):Hud"));
+	CHECK(stub.contains("hxgodot.Native.call(__hxgodotScript().__hxgodotId, \"create_hud\", [p])"));
+	CHECK(stub.contains("function refresh(amount:Float, ?scale:Float):Void"));
+	CHECK(stub.contains("hxgodot.Native.call(__hxgodotId, \"refresh\", __args)"));
+	CHECK(stub.contains("while (__args.length > 0 && __args[__args.length - 1] == null)"));
+	// A variable becomes a property that reads and writes the engine property.
+	CHECK(stub.contains("public var health(get, set):Int"));
+	CHECK(stub.contains("hxgodot.Native.getProperty(__hxgodotId, \"health\")"));
+	CHECK(stub.contains("hxgodot.Native.setProperty(__hxgodotId, \"health\", value)"));
+	// A `static var` is writable; a `const` is only readable.
+	CHECK(stub.contains("public static var shared_count(get, set):Int"));
+	CHECK(stub.contains("hxgodot.Native.setProperty(__hxgodotScript().__hxgodotId, \"shared_count\", value)"));
+	CHECK(stub.contains("public static var MAX_HEALTH(get, never):Int"));
+	CHECK_FALSE(stub.contains("static function set_MAX_HEALTH"));
+
+	// A member the engine base already declares is not redeclared.
+	HashSet<String> reserved_refresh;
+	reserved_refresh.insert("refresh");
+	const String trimmed = generate_gdscript_stub(entry, info, reserved_refresh);
+	CHECK_FALSE(trimmed.contains("function refresh"));
+}
+
+TEST_CASE("[Modules][Haxe] completion and lookup see a GDScript global class") {
+	const String dir = make_scratch_dir();
+	const String gd_path = write_source(dir, "hud.gd",
+			"class_name Hud\n"
+			"extends Node2D\n"
+			"signal died\n"
+			"@export var health: int = 10\n"
+			"var label: String = \"x\"\n"
+			"static func create_hud(p: int) -> Hud:\n"
+			"\treturn null\n"
+			"func refresh(amount: float) -> void:\n"
+			"\tpass\n");
+	GDScriptGlobalClassScope scope("Hud", "Node2D", gd_path);
+
+	HaxeGDScriptLibrary *classes = HaxeGDScriptLibrary::get_singleton();
+	REQUIRE(classes->ensure_indexed());
+	CHECK(classes->has_type("Hud"));
+	HaxeClassInfo info;
+	REQUIRE(classes->get_type_info("Hud", info));
+	CHECK(info.find_function("refresh") != nullptr);
+
+	const String main_path = write_source(dir, "Main.hx",
+			"package;\n"
+			"import godot.Node2D;\n"
+			"class Main extends Node2D {\n"
+			"\tfunction f() {\n"
+			"\t}\n"
+			"}\n");
+
+	const String mark = String::chr(0xFFFF);
+
+	// A type position offers the GDScript class.
+	const HashSet<String> types = completion_names(
+			"class Main {\n"
+			"\tvar h:" +
+			mark + "\n"
+				   "}\n");
+	CHECK(types.has("Hud"));
+
+	// The class name offers its static members only.
+	const HashSet<String> statics = completion_names(
+			"class Main {\n"
+			"\tfunction f() {\n"
+			"\t\tHud." +
+			mark + "\n"
+				   "\t}\n"
+				   "}\n");
+	CHECK(statics.has("create_hud"));
+	CHECK_FALSE(statics.has("refresh"));
+
+	// A value typed with the class offers the instance members, including the
+	// engine ones inherited from the native base.
+	const HashSet<String> instance = completion_names(
+			"class Main {\n"
+			"\tfunction f() {\n"
+			"\t\tvar h:Hud;\n"
+			"\t\th." +
+			mark + "\n"
+				   "\t}\n"
+				   "}\n");
+	CHECK(instance.has("refresh"));
+	CHECK(instance.has("health"));
+	CHECK(instance.has("label"));
+	CHECK(instance.has("died"));
+	CHECK(instance.has("position"));
+	CHECK_FALSE(instance.has("create_hud"));
+
+	// `get_node("x", Hud)` refines the engine node to the GDScript class.
+	const HashSet<String> typed = completion_names(
+			"class Main {\n"
+			"\tfunction f() {\n"
+			"\t\tget_node(\"Hero\", Hud)." +
+			mark + "\n"
+				   "\t}\n"
+				   "}\n");
+	CHECK(typed.has("refresh"));
+	CHECK(typed.has("health"));
+
+	// Without the typed argument the result stays an engine node: engine
+	// members are offered, but the GDScript ones need the typed form
+	// (`get_node("Hero", Hud)`), because the static analysis cannot know which
+	// script is attached at run time.
+	const HashSet<String> untyped = completion_names(
+			"class Main extends Node2D {\n"
+			"\tfunction f() {\n"
+			"\t\tget_node(\"Hero\")." +
+					mark + "\n"
+						   "\t}\n"
+						   "}\n",
+			main_path);
+	CHECK(untyped.has("queue_free"));
+	CHECK_FALSE(untyped.has("refresh"));
+
+	// A definition lookup jumps into the `.gd` file.
+	ScriptLanguage::LookupResult result;
+	REQUIRE(haxe_lookup_code("Hud.", "refresh", String(), nullptr, result) == OK);
+	CHECK(result.type == ScriptLanguage::LOOKUP_RESULT_CLASS_METHOD);
+	CHECK(result.script_path == gd_path);
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] the utility host resolves a GDScript class base") {
+	const String dir = make_scratch_dir();
+	const String gd_path = write_source(dir, "hud.gd",
+			"class_name Hud\n"
+			"extends Node2D\n"
+			"func refresh() -> void:\n"
+			"\tpass\n");
+	GDScriptGlobalClassScope scope("Hud", "Node2D", gd_path);
+
+	// The glue walks from the script name to the binding of its native base.
+	HxValue value = {};
+	REQUIRE(HaxeRuntime::host_utility("class_parent", 0, "Hud", &value) == 0);
+	REQUIRE(value.s != nullptr);
+	CHECK(String::utf8(value.s) == "Node2D");
+
+	// A plain engine class keeps the ClassDB answer.
+	HxValue engine = {};
+	REQUIRE(HaxeRuntime::host_utility("class_parent", 0, "Node2D", &engine) == 0);
+	REQUIRE(engine.s != nullptr);
+	CHECK(String::utf8(engine.s) == "CanvasItem");
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a package prefix in code completes like an import") {
+	const String dir = make_scratch_dir();
+	(void)write_source(dir.path_join("pkg"), "Top.hx",
+			"package pkg;\nclass Top {\n}\n");
+	(void)write_source(dir.path_join("pkg").path_join("alpha"), "Beta.hx",
+			"package pkg.alpha;\nclass Beta {\n}\n");
+	(void)write_source(dir.path_join("pkg").path_join("alpha").path_join("gamma"), "Delta.hx",
+			"package pkg.alpha.gamma;\nclass Delta {\n}\n");
+	SourceDirScope scope(dir);
+
+	// `pkg.` inside a function body: the receiver names a package, not a type,
+	// so the sub-package `alpha` and the type `Top` are offered, and the
+	// dotted-away names (`pkg.Top`) are not repeated.
+	const HashSet<String> root = completion_names(
+			"class Other {\n\tfunction f() {\n\t\tpkg." + String::chr(0xFFFF) + "\n\t}\n}\n");
+	CHECK(root.has("alpha"));
+	CHECK(root.has("Top"));
+	CHECK_FALSE(root.has("pkg.Top"));
+
+	// A second package level offers the next sub-package and the types after it.
+	const HashSet<String> nested = completion_names(
+			"class Other {\n\tfunction f() {\n\t\tpkg.alpha." + String::chr(0xFFFF) + "\n\t}\n}\n");
+	CHECK(nested.has("Beta"));
+	CHECK(nested.has("gamma"));
+	CHECK_FALSE(nested.has("pkg.alpha.Beta"));
+
+	// A receiver that is neither a type nor a package stays empty rather than
+	// offering unrelated project classes.
+	const HashSet<String> unknown = completion_names(
+			"class Other {\n\tfunction f() {\n\t\tnotAPackage." + String::chr(0xFFFF) + "\n\t}\n}\n");
+	CHECK(unknown.is_empty());
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a project class extends a library class") {
+	const String dir = make_scratch_dir();
+	// A project-local haxelib holding one Godot-facing library class: it
+	// extends `Node2D` and exports a member, exactly as a project script would.
+	const String haxelib_root = dir.path_join("haxelib");
+	const String version_root = haxelib_root.path_join("mylib").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json",
+			"{\n\t\"name\": \"mylib\",\n\t\"classPath\": \"src\"\n}\n");
+	(void)write_source(version_root.path_join("src").path_join("mylib"), "BaseThing.hx",
+			"package mylib;\n"
+			"import godot.Node2D;\n"
+			"@:globalClass\n"
+			"class BaseThing extends Node2D {\n"
+			"\t@:export var hp:Int = 3;\n"
+			"\tpublic var helper:String;\n"
+			"\toverride function _ready():Void {}\n"
+			"\tpublic function libraryMethod():Void {}\n"
+			"}\n");
+	const String project_dir = dir.path_join("source");
+	const String bar_path = write_source(project_dir, "Bar.hx",
+			"package;\n"
+			"import mylib.BaseThing;\n"
+			"class Bar extends BaseThing {\n"
+			"\t@:export var speed:Float = 1.0;\n"
+			"\tpublic function ownMethod():Void {}\n"
+			"}\n");
+	HaxelibDirScope lib_scope(haxelib_root);
+	SourceDirScope src_scope(project_dir);
+
+	// The library class is parsed like a project class: its base and its
+	// `@:globalClass` annotation are read from the source. The project-only
+	// lookup deliberately does not answer for it, so completion can keep
+	// preferring engine, standard library and project types.
+	HaxeClassInfo base_info;
+	REQUIRE(HaxeProject::resolve_class_info_by_name("mylib.BaseThing", base_info));
+	CHECK(base_info.base == "Node2D");
+	CHECK(base_info.is_global_class);
+	HaxeClassInfo project_only;
+	CHECK_FALSE(HaxeProject::get_class_info_by_name("mylib.BaseThing", project_only));
+
+	// Because the library class extends a Godot class, a project class
+	// extending it resolves the same native base it would for a project base.
+	// Before this was resolved through the library index the lookup failed and
+	// the script could not be attached at all.
+	HaxeClassInfo bar_info;
+	REQUIRE(HaxeProject::get_class_info(bar_path, bar_info));
+	CHECK(HaxeProject::resolve_native_base(bar_info) == "Node2D");
+
+	Ref<HaxeScript> script;
+	script.instantiate();
+	REQUIRE(script->load_source_code(bar_path) == OK);
+	REQUIRE(script->is_valid());
+
+	// A library base has no editable project resource, so it is not handed out
+	// as the project script's base; the class chain still resolves through the
+	// library index for members, as the checks below show.
+	CHECK(script->get_base_script().is_null());
+
+	// The library's `@:export` member is inherited, with its default value and
+	// line, while a plain library variable is not a property.
+	HashSet<String> names;
+	List<PropertyInfo> properties;
+	script->get_script_property_list(&properties);
+	for (const PropertyInfo &property : properties) {
+		names.insert(property.name);
+	}
+	CHECK(names.has("speed"));
+	CHECK(names.has("hp"));
+	CHECK_FALSE(names.has("helper"));
+
+	Variant value;
+	CHECK(script->get_property_default_value("hp", value));
+	CHECK((int)value == 3);
+	CHECK(script->get_member_line("hp") > 0);
+
+	// The library class becomes a script class because it reaches `Node2D`, so
+	// the build marks its fields `@:keep` and an engine-called override such as
+	// `_ready` survives `-dce full`. Only classes that reach an engine class are
+	// listed, and by their own name (not their package).
+	const Vector<String> library_scripts = HaxeProject::get_library_script_classes();
+	CHECK(library_scripts.has("mylib.BaseThing"));
+	CHECK(library_scripts.size() == 1);
+
+	// The build marks that class's fields `@:keep`, so the Inspector's
+	// `@:export` members and the engine-called overrides survive `-dce full`.
+	// The class itself is not kept: a library class no project code uses stays
+	// dead code.
+	Vector<Pair<String, String>> keep_mappings;
+	const Vector<String> keep_arguments = HaxeBuild::collect_arguments(false, false, Vector<HaxeBuild::Library>(), Vector<HaxeClassInfo>(), keep_mappings);
+	CHECK(keep_arguments.has("--macro"));
+	CHECK(keep_arguments.has("addGlobalMetadata('mylib.BaseThing', '@:keep', true, false, true)"));
+
+	// The engine asks the script instance whether it has a method, and it must
+	// answer for a method inherited from the library base: `_ready` declared by
+	// `BaseThing` is called on a `Bar` instance. `has_method()` stays own-only,
+	// as `GDScript::has_method` does, while the inherited list carries both.
+	CHECK_FALSE(script->has_method("_ready"));
+	CHECK(script->has_inherited_method("_ready"));
+	CHECK(script->has_inherited_method("libraryMethod"));
+	CHECK(script->has_inherited_method("ownMethod"));
+	CHECK_FALSE(script->has_inherited_method("missingMethod"));
+	List<MethodInfo> methods;
+	script->get_inherited_script_method_list(&methods);
+	HashSet<String> method_names;
+	for (const MethodInfo &method : methods) {
+		method_names.insert(method.name);
+	}
+	CHECK(method_names.has("_ready"));
+	CHECK(method_names.has("libraryMethod"));
+	CHECK(method_names.has("ownMethod"));
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] library @:globalClass types are registered with the editor") {
+	const String dir = make_scratch_dir();
+	// A project-local haxelib with one Godot-facing `@:globalClass` class and
+	// one plain class. Only the former can be a node script.
+	const String haxelib_root = dir.path_join("haxelib");
+	const String version_root = haxelib_root.path_join("visual").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json",
+			"{\n\t\"name\": \"visual\",\n\t\"classPath\": \"src\"\n}\n");
+	const String video_path = write_source(version_root.path_join("src").path_join("visual"), "Video.hx",
+			"package visual;\n"
+			"import godot.Sprite2D;\n"
+			"@:globalClass\n"
+			"class Video extends Sprite2D {\n"
+			"\t@:exportFile([\"*.mp4\"])\n"
+			"\t@:export var defaultVideo:String = \"\";\n"
+			"}\n");
+	(void)write_source(version_root.path_join("src").path_join("visual"), "Helper.hx",
+			"package visual;\n"
+			"class Helper {\n"
+			"\tpublic static function ping():Void {}\n"
+			"}\n");
+	const String project_dir = dir.path_join("source");
+	HaxelibDirScope lib_scope(haxelib_root);
+	SourceDirScope src_scope(project_dir);
+
+	// The library class reaches `Sprite2D`, so it is offered like a project
+	// script. Its stored path is the localized one, the form the editor and a
+	// saved scene use. The plain class reaches no engine class and stays out.
+	const Vector<HaxeProject::LibraryGlobalClass> global_classes = HaxeProject::get_library_global_classes();
+	REQUIRE(global_classes.size() == 1);
+	CHECK(global_classes[0].name == "Video");
+	CHECK(global_classes[0].native_base == "Sprite2D");
+	const String registered_path = ProjectSettings::get_singleton()->localize_path(video_path);
+	CHECK(global_classes[0].path == registered_path);
+
+	// A project-registered Haxe class and a GDScript class under the haxelib
+	// directory must survive the synchronization: only Haxe library classes
+	// are managed here, and a project class is never dropped.
+	const String project_thing_path = project_dir.path_join("ProjectThing.hx");
+	ScriptServer::add_global_class("ProjectThing", "Node2D", "Haxe", project_thing_path, false, false);
+	ScriptServer::add_global_class("GdThing", "Node2D", "GDScript", haxelib_root.path_join("GdThing.gd"), false, false);
+
+	HaxeProject::sync_library_global_classes();
+	CHECK(ScriptServer::is_global_class("Video"));
+	CHECK(ScriptServer::get_global_class_language("Video") == "Haxe");
+	CHECK(ScriptServer::get_global_class_native_base("Video") == "Sprite2D");
+	CHECK(ScriptServer::get_global_class_path("Video") == registered_path);
+	CHECK(ScriptServer::is_global_class("ProjectThing"));
+	CHECK(ScriptServer::is_global_class("GdThing"));
+
+	// Removing the library drops the registered class again; a stale entry
+	// would keep pointing at a source that is no longer on disk.
+	remove_scratch_dir(version_root);
+	HaxeLibraryIndex::get_singleton()->invalidate();
+	HaxeProject::invalidate();
+	HaxeProject::sync_library_global_classes();
+	CHECK_FALSE(ScriptServer::is_global_class("Video"));
+
+	ScriptServer::remove_global_class("ProjectThing");
+	ScriptServer::remove_global_class("GdThing");
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] the Android NDK is found in every documented layout") {
+	const String dir = make_scratch_dir();
+
+	// A fake NDK: the two entries `has_android_ndk_layout()` requires.
+	const auto make_ndk = [](const String &p_root, const String &p_name) {
+		const String ndk = p_root.path_join(p_name);
+		(void)write_source(ndk, "source.properties", "Pkg.Revision = 27.3.13750724\n");
+		(void)write_source(ndk.path_join("toolchains/llvm/prebuilt"), ".keep", "");
+		return ndk;
+	};
+
+	// 1. `ANDROID_NDK_ROOT` pointing straight at an install.
+	const String direct = make_ndk(dir.path_join("standalone"), "android-ndk-r29");
+	CHECK(HaxeBuild::find_android_ndk(direct) == direct);
+
+	// 2. A directory holding several versioned installs: the newest wins.
+	const String versioned_root = dir.path_join("versioned");
+	const String older = make_ndk(versioned_root, "25.2.9519653");
+	const String newer = make_ndk(versioned_root, "27.3.13750724");
+	CHECK(HaxeBuild::find_android_ndk(versioned_root) == newer);
+	CHECK(HaxeBuild::find_android_ndk(older) == older);
+
+	// 3. An SDK whose NDK lives under `ndk/<version>/`.
+	const String sdk = dir.path_join("android-sdk");
+	const String sdk_ndk = make_ndk(sdk.path_join("ndk"), "27.3.13750724");
+	CHECK(HaxeBuild::find_android_ndk(sdk) == sdk_ndk);
+
+	// 4. The legacy `ndk-bundle/` layout is accepted too.
+	const String legacy_sdk = dir.path_join("legacy-sdk");
+	const String legacy_ndk = make_ndk(legacy_sdk, "ndk-bundle");
+	CHECK(HaxeBuild::find_android_ndk(legacy_sdk) == legacy_ndk);
+
+	// 5. The SDK manager's `ndk/` directory passed directly (one level without
+	//    the SDK root) still resolves.
+	CHECK(HaxeBuild::find_android_ndk(sdk.path_join("ndk")) == sdk_ndk);
+
+	// 6. The layout that fails on a fresh machine: the SDK has no `ndk/` of its
+	//    own, but a standalone NDK was downloaded next to it. The hint is the
+	//    SDK, and the NDK is a sibling.
+	const String sibling_parent = dir.path_join("sibling");
+	const String bare_sdk = sibling_parent.path_join("android-sdk");
+	(void)write_source(bare_sdk.path_join("platform-tools"), "adb", ""); // just a directory
+	const String sibling_ndk = make_ndk(sibling_parent, "android-ndk-r29");
+	CHECK(HaxeBuild::find_android_ndk(bare_sdk) == sibling_ndk);
+
+	// 7. A hint that does not exist and has no NDK anywhere above it resolves
+	//    to nothing instead of guessing.
+	CHECK(HaxeBuild::find_android_ndk(dir.path_join("missing").path_join("deep").path_join("ndk")).is_empty());
+	CHECK(HaxeBuild::find_android_ndk(String()).is_empty());
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] an edited library changes the build signature") {
+	const String dir = make_scratch_dir();
+	const String class_path = dir.path_join("source");
+
+	// A directory that does not exist yet still has a stable signature.
+	const String missing = HaxeBuild::library_edit_signature(class_path);
+	CHECK_FALSE(missing.is_empty());
+
+	(void)write_source(class_path, "Widget.hx", "class Widget {}\n");
+	const String with_file = HaxeBuild::library_edit_signature(class_path);
+	CHECK(with_file != missing);
+
+	// A content change of a different length changes the signature even when
+	// the platform's modification-time resolution would not.
+	(void)write_source(class_path, "Widget.hx", "class Widget { var longer:String; }\n");
+	const String edited = HaxeBuild::library_edit_signature(class_path);
+	CHECK(edited != with_file);
+
+	// A file in a sub-package counts too.
+	(void)write_source(class_path.path_join("pkg"), "Extra.hx", "package pkg;\nclass Extra {}\n");
+	const String nested = HaxeBuild::library_edit_signature(class_path);
+	CHECK(nested != edited);
+
+	remove_scratch_dir(dir);
+}
+
+/* Little-endian writers for the synthetic ELF object the dynamic dependency
+ * tests build. */
+static void elf_put_u16(PackedByteArray &p_data, int64_t p_offset, uint16_t p_value) {
+	p_data.write[p_offset] = p_value & 0xff;
+	p_data.write[p_offset + 1] = (p_value >> 8) & 0xff;
+}
+
+static void elf_put_u32(PackedByteArray &p_data, int64_t p_offset, uint32_t p_value) {
+	for (int i = 0; i < 4; i++) {
+		p_data.write[p_offset + i] = (p_value >> (8 * i)) & 0xff;
+	}
+}
+
+static void elf_put_u64(PackedByteArray &p_data, int64_t p_offset, uint64_t p_value) {
+	for (int i = 0; i < 8; i++) {
+		p_data.write[p_offset + i] = (p_value >> (8 * i)) & 0xff;
+	}
+}
+
+/* Builds a minimal little-endian 64-bit ELF shared object with the given
+ * soname and `DT_NEEDED` names, so the reader can be tested without depending
+ * on a toolchain or on a library that happens to be installed. */
+static PackedByteArray build_test_elf(const String &p_soname, const Vector<String> &p_needed, uint16_t p_machine) {
+	PackedByteArray strings;
+	Vector<uint64_t> needed_offsets;
+	auto add_string = [&strings](const String &p_value) -> uint64_t {
+		const uint64_t offset = strings.size();
+		for (int i = 0; i < p_value.length(); i++) {
+			strings.push_back((uint8_t)p_value[i]);
+		}
+		strings.push_back(0);
+		return offset;
+	};
+	const uint64_t soname_offset = add_string(p_soname);
+	for (const String &needed : p_needed) {
+		needed_offsets.push_back(add_string(needed));
+	}
+
+	const int64_t dynamic_offset = 0x100;
+	const int64_t string_offset = 0x200;
+	const uint64_t load_base = 0x1000;
+	// DT_NEEDED entries plus DT_SONAME, DT_STRTAB, DT_STRSZ and DT_NULL.
+	const int entries = p_needed.size() + 4;
+	const int64_t dynamic_size = (int64_t)entries * 16;
+	const int64_t total_size = string_offset + strings.size();
+
+	PackedByteArray data;
+	data.resize(total_size);
+	data.fill(0);
+
+	// ELF header.
+	data.write[0] = 0x7f;
+	data.write[1] = 'E';
+	data.write[2] = 'L';
+	data.write[3] = 'F';
+	data.write[4] = 2; // ELFCLASS64
+	data.write[5] = 1; // ELFDATA2LSB
+	data.write[6] = 1; // EV_CURRENT
+	elf_put_u16(data, 16, 3); // ET_DYN
+	elf_put_u16(data, 18, p_machine);
+	elf_put_u32(data, 20, 1);
+	elf_put_u64(data, 32, 0x40); // e_phoff
+	elf_put_u16(data, 52, 64); // e_ehsize
+	elf_put_u16(data, 54, 56); // e_phentsize
+	elf_put_u16(data, 56, 2); // e_phnum
+
+	// PT_LOAD covering the whole file: the string table address is translated
+	// back to a file offset through it.
+	const int64_t load_header = 0x40;
+	elf_put_u32(data, load_header + 0, 1); // PT_LOAD
+	elf_put_u64(data, load_header + 8, 0); // p_offset
+	elf_put_u64(data, load_header + 16, load_base); // p_vaddr
+	elf_put_u64(data, load_header + 24, load_base); // p_paddr
+	elf_put_u64(data, load_header + 32, total_size); // p_filesz
+	elf_put_u64(data, load_header + 40, total_size); // p_memsz
+	elf_put_u64(data, load_header + 48, 0x1000); // p_align
+
+	// PT_DYNAMIC pointing at the dynamic array.
+	const int64_t dynamic_header = load_header + 56;
+	elf_put_u32(data, dynamic_header + 0, 2); // PT_DYNAMIC
+	elf_put_u64(data, dynamic_header + 8, dynamic_offset);
+	elf_put_u64(data, dynamic_header + 16, load_base + dynamic_offset);
+	elf_put_u64(data, dynamic_header + 24, load_base + dynamic_offset);
+	elf_put_u64(data, dynamic_header + 32, dynamic_size);
+	elf_put_u64(data, dynamic_header + 40, dynamic_size);
+	elf_put_u64(data, dynamic_header + 48, 8);
+
+	// Dynamic entries.
+	int64_t entry = dynamic_offset;
+	auto put_entry = [&data, &entry](uint64_t p_tag, uint64_t p_value) {
+		elf_put_u64(data, entry, p_tag);
+		elf_put_u64(data, entry + 8, p_value);
+		entry += 16;
+	};
+	for (const uint64_t needed_offset : needed_offsets) {
+		put_entry(1, needed_offset); // DT_NEEDED
+	}
+	put_entry(14, soname_offset); // DT_SONAME
+	put_entry(5, load_base + string_offset); // DT_STRTAB
+	put_entry(10, strings.size()); // DT_STRSZ
+	put_entry(0, 0); // DT_NULL
+
+	for (int i = 0; i < strings.size(); i++) {
+		data.write[string_offset + i] = strings[i];
+	}
+	return data;
+}
+
+static Error write_bytes(const String &p_path, const PackedByteArray &p_data) {
+	DirAccess::make_dir_recursive_absolute(p_path.get_base_dir());
+	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::WRITE);
+	if (file.is_null()) {
+		return ERR_CANT_CREATE;
+	}
+	file->store_buffer(p_data);
+	return OK;
+}
+
+TEST_CASE("[Modules][Haxe] the ELF reader reports soname and dynamic dependencies") {
+	const String dir = make_scratch_dir();
+
+	Vector<String> needed;
+	needed.push_back("libvlc.so");
+	needed.push_back("libc++_shared.so");
+	const String path = dir.path_join("libsample.so");
+	REQUIRE(write_bytes(path, build_test_elf("libsample.so", needed, HaxeElf::MACHINE_AARCH64)) == OK);
+
+	HaxeElf::Object object;
+	REQUIRE(HaxeElf::parse(path, object) == OK);
+	CHECK(object.bits == 64);
+	CHECK(object.machine == HaxeElf::MACHINE_AARCH64);
+	CHECK(object.soname == "libsample.so");
+	REQUIRE(object.needed.size() == 2);
+	CHECK(object.needed[0] == "libvlc.so");
+	CHECK(object.needed[1] == "libc++_shared.so");
+
+	// The ABI names map to the machines the bundled libraries are built for.
+	CHECK(HaxeElf::abi_to_machine("arm64-v8a") == HaxeElf::MACHINE_AARCH64);
+	CHECK(HaxeElf::abi_to_machine("armeabi-v7a") == HaxeElf::MACHINE_ARM);
+	CHECK(HaxeElf::abi_to_machine("x86") == HaxeElf::MACHINE_X86);
+	CHECK(HaxeElf::abi_to_machine("x86_64") == HaxeElf::MACHINE_X86_64);
+	CHECK(HaxeElf::abi_to_machine("wasm32") == HaxeElf::MACHINE_NONE);
+	CHECK(HaxeElf::machine_to_abi(HaxeElf::MACHINE_X86_64) == "x86_64");
+
+	// A file that is not an ELF object is rejected instead of misread, so an
+	// unrelated `.so` name in the project cannot be packaged by accident.
+	const String text = write_source(dir, "not_elf.so", "not an ELF object\n");
+	CHECK(HaxeElf::parse(text, object) != OK);
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] bundled native libraries are resolved for one Android ABI") {
+	const String dir = make_scratch_dir();
+	const String haxelib = dir.path_join("haxelib");
+	const String libdir = haxelib.path_join("hxvlc-godot").path_join("git").path_join("lib");
+
+	// The compiled Haxe library needs libvlc.so and a system library. hxvlc
+	// ships libvlc under per-ABI names that all declare the soname libvlc.so,
+	// and libvlc itself needs libc++_shared.so, so the resolution has to be
+	// transitive and pick the file built for the exported ABI.
+	Vector<String> root_needed;
+	root_needed.push_back("libvlc.so");
+	root_needed.push_back("libm.so");
+	const String root_path = dir.path_join("libmy_project.so");
+	REQUIRE(write_bytes(root_path, build_test_elf("libmy_project.so", root_needed, HaxeElf::MACHINE_AARCH64)) == OK);
+
+	Vector<String> vlc_needed;
+	vlc_needed.push_back("libc++_shared.so");
+	Vector<String> none;
+	REQUIRE(write_bytes(libdir.path_join("libvlc-64.so"),
+					build_test_elf("libvlc.so", vlc_needed, HaxeElf::MACHINE_AARCH64)) == OK);
+	REQUIRE(write_bytes(libdir.path_join("libvlc-v7.so"),
+					build_test_elf("libvlc.so", vlc_needed, HaxeElf::MACHINE_ARM)) == OK);
+	REQUIRE(write_bytes(libdir.path_join("libc++_shared-64.so"),
+					build_test_elf("libc++_shared.so", none, HaxeElf::MACHINE_AARCH64)) == OK);
+
+	HaxelibDirScope lib_scope(haxelib);
+
+	const Vector<HaxeProject::NativeLibrary> arm64 = HaxeProject::resolve_native_libraries(root_path, "arm64-v8a");
+	REQUIRE(arm64.size() == 2);
+	HashSet<String> names;
+	for (const HaxeProject::NativeLibrary &library : arm64) {
+		names.insert(library.name);
+	}
+	CHECK(names.has("libvlc.so"));
+	CHECK(names.has("libc++_shared.so"));
+	for (const HaxeProject::NativeLibrary &library : arm64) {
+		CHECK(library.path.get_file().ends_with("-64.so"));
+	}
+
+	// The 32-bit library is chosen for the 32-bit ABI, and the missing system
+	// library is reported instead of packaged.
+	Vector<String> missing;
+	const Vector<HaxeProject::NativeLibrary> armv7 = HaxeProject::resolve_native_libraries(root_path, "armeabi-v7a", &missing);
+	REQUIRE(armv7.size() == 1);
+	CHECK(armv7[0].name == "libvlc.so");
+	CHECK(armv7[0].path.get_file() == "libvlc-v7.so");
+	CHECK(missing.has("libm.so"));
+	CHECK(missing.has("libc++_shared.so"));
 
 	remove_scratch_dir(dir);
 }

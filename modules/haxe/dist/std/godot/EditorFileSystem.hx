@@ -51,10 +51,46 @@ class EditorFileSystem extends godot.Node {
 	public function reimport_files(files:godot.PackedStringArray):Void {
 		Native.call(__hxgodotId, "reimport_files", [files]);
 	}
+
+	/** `filesystem_changed` signal. */
+	public var filesystem_changed(get, never):godot.Signal;
+	@:noCompletion function get_filesystem_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "filesystem_changed");
+	}
 	@:keep public static inline var SIGNAL_FILESYSTEM_CHANGED:String = "filesystem_changed";
+
+	/** `script_classes_updated` signal. */
+	public var script_classes_updated(get, never):godot.Signal;
+	@:noCompletion function get_script_classes_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "script_classes_updated");
+	}
 	@:keep public static inline var SIGNAL_SCRIPT_CLASSES_UPDATED:String = "script_classes_updated";
+
+	/** `sources_changed` signal. */
+	public var sources_changed(get, never):godot.Signal;
+	@:noCompletion function get_sources_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "sources_changed");
+	}
 	@:keep public static inline var SIGNAL_SOURCES_CHANGED:String = "sources_changed";
+
+	/** `resources_reimporting` signal. */
+	public var resources_reimporting(get, never):godot.Signal;
+	@:noCompletion function get_resources_reimporting():godot.Signal {
+		return godot.Signal.fromObject(this, "resources_reimporting");
+	}
 	@:keep public static inline var SIGNAL_RESOURCES_REIMPORTING:String = "resources_reimporting";
+
+	/** `resources_reimported` signal. */
+	public var resources_reimported(get, never):godot.Signal;
+	@:noCompletion function get_resources_reimported():godot.Signal {
+		return godot.Signal.fromObject(this, "resources_reimported");
+	}
 	@:keep public static inline var SIGNAL_RESOURCES_REIMPORTED:String = "resources_reimported";
+
+	/** `resources_reload` signal. */
+	public var resources_reload(get, never):godot.Signal;
+	@:noCompletion function get_resources_reload():godot.Signal {
+		return godot.Signal.fromObject(this, "resources_reload");
+	}
 	@:keep public static inline var SIGNAL_RESOURCES_RELOAD:String = "resources_reload";
 }

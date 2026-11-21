@@ -390,10 +390,40 @@ class ItemList extends godot.Control {
 	public function force_update_list_size():Void {
 		Native.call(__hxgodotId, "force_update_list_size", []);
 	}
+
+	/** `item_selected` signal. */
+	public var item_selected(get, never):godot.Signal;
+	@:noCompletion function get_item_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "item_selected");
+	}
 	@:keep public static inline var SIGNAL_ITEM_SELECTED:String = "item_selected";
+
+	/** `empty_clicked` signal. */
+	public var empty_clicked(get, never):godot.Signal;
+	@:noCompletion function get_empty_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "empty_clicked");
+	}
 	@:keep public static inline var SIGNAL_EMPTY_CLICKED:String = "empty_clicked";
+
+	/** `item_clicked` signal. */
+	public var item_clicked(get, never):godot.Signal;
+	@:noCompletion function get_item_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "item_clicked");
+	}
 	@:keep public static inline var SIGNAL_ITEM_CLICKED:String = "item_clicked";
+
+	/** `multi_selected` signal. */
+	public var multi_selected(get, never):godot.Signal;
+	@:noCompletion function get_multi_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "multi_selected");
+	}
 	@:keep public static inline var SIGNAL_MULTI_SELECTED:String = "multi_selected";
+
+	/** `item_activated` signal. */
+	public var item_activated(get, never):godot.Signal;
+	@:noCompletion function get_item_activated():godot.Signal {
+		return godot.Signal.fromObject(this, "item_activated");
+	}
 	@:keep public static inline var SIGNAL_ITEM_ACTIVATED:String = "item_activated";
 	@:keep public static var ICON_MODE_TOP:Int = 0;
 	@:keep public static var ICON_MODE_LEFT:Int = 1;

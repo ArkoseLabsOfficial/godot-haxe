@@ -240,5 +240,11 @@ class TileData extends godot.Object {
 	public function get_custom_data_by_layer_id(layer_id:Int):Dynamic {
 		return cast Native.call(__hxgodotId, "get_custom_data_by_layer_id", [layer_id]);
 	}
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
 }

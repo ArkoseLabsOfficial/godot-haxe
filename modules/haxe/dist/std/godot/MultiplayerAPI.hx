@@ -69,10 +69,40 @@ class MultiplayerAPI extends godot.RefCounted {
 	public static function create_default_interface():godot.MultiplayerAPI {
 		return cast Native.callStatic("MultiplayerAPI", "create_default_interface", []);
 	}
+
+	/** `peer_connected` signal. */
+	public var peer_connected(get, never):godot.Signal;
+	@:noCompletion function get_peer_connected():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_connected");
+	}
 	@:keep public static inline var SIGNAL_PEER_CONNECTED:String = "peer_connected";
+
+	/** `peer_disconnected` signal. */
+	public var peer_disconnected(get, never):godot.Signal;
+	@:noCompletion function get_peer_disconnected():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_disconnected");
+	}
 	@:keep public static inline var SIGNAL_PEER_DISCONNECTED:String = "peer_disconnected";
+
+	/** `connected_to_server` signal. */
+	public var connected_to_server(get, never):godot.Signal;
+	@:noCompletion function get_connected_to_server():godot.Signal {
+		return godot.Signal.fromObject(this, "connected_to_server");
+	}
 	@:keep public static inline var SIGNAL_CONNECTED_TO_SERVER:String = "connected_to_server";
+
+	/** `connection_failed` signal. */
+	public var connection_failed(get, never):godot.Signal;
+	@:noCompletion function get_connection_failed():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_failed");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_FAILED:String = "connection_failed";
+
+	/** `server_disconnected` signal. */
+	public var server_disconnected(get, never):godot.Signal;
+	@:noCompletion function get_server_disconnected():godot.Signal {
+		return godot.Signal.fromObject(this, "server_disconnected");
+	}
 	@:keep public static inline var SIGNAL_SERVER_DISCONNECTED:String = "server_disconnected";
 	@:keep public static var RPC_MODE_DISABLED:Int = 0;
 	@:keep public static var RPC_MODE_ANY_PEER:Int = 1;

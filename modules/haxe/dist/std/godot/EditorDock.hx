@@ -153,7 +153,19 @@ class EditorDock extends godot.MarginContainer {
 	public function is_closable():Bool {
 		return cast Native.call(__hxgodotId, "is_closable", []);
 	}
+
+	/** `opened` signal. */
+	public var opened(get, never):godot.Signal;
+	@:noCompletion function get_opened():godot.Signal {
+		return godot.Signal.fromObject(this, "opened");
+	}
 	@:keep public static inline var SIGNAL_OPENED:String = "opened";
+
+	/** `closed` signal. */
+	public var closed(get, never):godot.Signal;
+	@:noCompletion function get_closed():godot.Signal {
+		return godot.Signal.fromObject(this, "closed");
+	}
 	@:keep public static inline var SIGNAL_CLOSED:String = "closed";
 	@:keep public static var DOCK_LAYOUT_VERTICAL:Int = 1;
 	@:keep public static var DOCK_LAYOUT_HORIZONTAL:Int = 2;

@@ -17,6 +17,12 @@ class Marshalls extends godot.Object {
 		return cast Native.singleton("Marshalls");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Marshalls;
+	@:noCompletion static function get_singleton():godot.Marshalls {
+		return cast Native.singleton("Marshalls");
+	}
+
 	public function variant_to_base64(variant:Dynamic, full_objects:Bool = false):String {
 		return cast Native.call(__hxgodotId, "variant_to_base64", [variant, full_objects]);
 	}

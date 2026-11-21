@@ -147,9 +147,33 @@ class BaseButton extends godot.Control {
 	public function is_shortcut_feedback():Bool {
 		return cast Native.call(__hxgodotId, "is_shortcut_feedback", []);
 	}
+
+	/** `pressed` signal. */
+	public var pressed(get, never):godot.Signal;
+	@:noCompletion function get_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pressed");
+	}
 	@:keep public static inline var SIGNAL_PRESSED:String = "pressed";
+
+	/** `button_up` signal. */
+	public var button_up(get, never):godot.Signal;
+	@:noCompletion function get_button_up():godot.Signal {
+		return godot.Signal.fromObject(this, "button_up");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_UP:String = "button_up";
+
+	/** `button_down` signal. */
+	public var button_down(get, never):godot.Signal;
+	@:noCompletion function get_button_down():godot.Signal {
+		return godot.Signal.fromObject(this, "button_down");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_DOWN:String = "button_down";
+
+	/** `toggled` signal. */
+	public var toggled(get, never):godot.Signal;
+	@:noCompletion function get_toggled():godot.Signal {
+		return godot.Signal.fromObject(this, "toggled");
+	}
 	@:keep public static inline var SIGNAL_TOGGLED:String = "toggled";
 	@:keep public static var DRAW_NORMAL:Int = 0;
 	@:keep public static var DRAW_PRESSED:Int = 1;

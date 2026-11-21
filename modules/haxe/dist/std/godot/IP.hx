@@ -17,6 +17,12 @@ class IP extends godot.Object {
 		return cast Native.singleton("IP");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.IP;
+	@:noCompletion static function get_singleton():godot.IP {
+		return cast Native.singleton("IP");
+	}
+
 	@:keep public static var RESOLVER_MAX_QUERIES:Int = 256;
 	@:keep public static var RESOLVER_INVALID_ID:Int = -1;
 

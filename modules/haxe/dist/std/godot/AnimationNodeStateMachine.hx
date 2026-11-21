@@ -48,7 +48,7 @@ class AnimationNodeStateMachine extends godot.AnimationRootNode {
 		Native.call(__hxgodotId, "replace_node", [name, node]);
 	}
 
-	public function get_node(name:String):godot.AnimationNode {
+	public function get_node<T:AnimationNode>(name:String, ?__type:Class<T>):T {
 		return cast Native.call(__hxgodotId, "get_node", [name]);
 	}
 

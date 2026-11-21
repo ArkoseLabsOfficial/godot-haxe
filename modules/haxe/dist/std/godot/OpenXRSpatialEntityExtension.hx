@@ -118,6 +118,12 @@ class OpenXRSpatialEntityExtension extends godot.OpenXRExtensionWrapper {
 	public function free_spatial_entity(entity:godot.RID):Void {
 		Native.call(__hxgodotId, "free_spatial_entity", [entity]);
 	}
+
+	/** `spatial_discovery_recommended` signal. */
+	public var spatial_discovery_recommended(get, never):godot.Signal;
+	@:noCompletion function get_spatial_discovery_recommended():godot.Signal {
+		return godot.Signal.fromObject(this, "spatial_discovery_recommended");
+	}
 	@:keep public static inline var SIGNAL_SPATIAL_DISCOVERY_RECOMMENDED:String = "spatial_discovery_recommended";
 	@:keep public static var CAPABILITY_PLANE_TRACKING:Int = 1000741000;
 	@:keep public static var CAPABILITY_MARKER_TRACKING_QR_CODE:Int = 1000743000;

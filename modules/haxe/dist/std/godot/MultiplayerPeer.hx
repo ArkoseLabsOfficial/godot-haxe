@@ -89,7 +89,19 @@ class MultiplayerPeer extends godot.PacketPeer {
 	public function is_server_relay_supported():Bool {
 		return cast Native.call(__hxgodotId, "is_server_relay_supported", []);
 	}
+
+	/** `peer_connected` signal. */
+	public var peer_connected(get, never):godot.Signal;
+	@:noCompletion function get_peer_connected():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_connected");
+	}
 	@:keep public static inline var SIGNAL_PEER_CONNECTED:String = "peer_connected";
+
+	/** `peer_disconnected` signal. */
+	public var peer_disconnected(get, never):godot.Signal;
+	@:noCompletion function get_peer_disconnected():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_disconnected");
+	}
 	@:keep public static inline var SIGNAL_PEER_DISCONNECTED:String = "peer_disconnected";
 	@:keep public static var CONNECTION_DISCONNECTED:Int = 0;
 	@:keep public static var CONNECTION_CONNECTING:Int = 1;

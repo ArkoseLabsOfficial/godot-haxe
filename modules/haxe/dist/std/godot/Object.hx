@@ -231,7 +231,19 @@ class Object extends hxgodot.NativeObject implements hxgodot.ValueOwner {
 	public function cancel_free():Void {
 		Native.call(__hxgodotId, "cancel_free", []);
 	}
+
+	/** `script_changed` signal. */
+	public var script_changed(get, never):godot.Signal;
+	@:noCompletion function get_script_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "script_changed");
+	}
 	@:keep public static inline var SIGNAL_SCRIPT_CHANGED:String = "script_changed";
+
+	/** `property_list_changed` signal. */
+	public var property_list_changed(get, never):godot.Signal;
+	@:noCompletion function get_property_list_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "property_list_changed");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_LIST_CHANGED:String = "property_list_changed";
 	@:keep public static var CONNECT_DEFERRED:Int = 1;
 	@:keep public static var CONNECT_PERSIST:Int = 2;

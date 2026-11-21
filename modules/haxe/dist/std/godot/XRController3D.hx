@@ -31,9 +31,39 @@ class XRController3D extends godot.XRNode3D {
 	public function get_tracker_hand():Int {
 		return cast Native.call(__hxgodotId, "get_tracker_hand", []);
 	}
+
+	/** `button_pressed` signal. */
+	public var button_pressed(get, never):godot.Signal;
+	@:noCompletion function get_button_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "button_pressed");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_PRESSED:String = "button_pressed";
+
+	/** `button_released` signal. */
+	public var button_released(get, never):godot.Signal;
+	@:noCompletion function get_button_released():godot.Signal {
+		return godot.Signal.fromObject(this, "button_released");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_RELEASED:String = "button_released";
+
+	/** `input_float_changed` signal. */
+	public var input_float_changed(get, never):godot.Signal;
+	@:noCompletion function get_input_float_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "input_float_changed");
+	}
 	@:keep public static inline var SIGNAL_INPUT_FLOAT_CHANGED:String = "input_float_changed";
+
+	/** `input_vector2_changed` signal. */
+	public var input_vector2_changed(get, never):godot.Signal;
+	@:noCompletion function get_input_vector2_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "input_vector2_changed");
+	}
 	@:keep public static inline var SIGNAL_INPUT_VECTOR2_CHANGED:String = "input_vector2_changed";
+
+	/** `profile_changed` signal. */
+	public var profile_changed(get, never):godot.Signal;
+	@:noCompletion function get_profile_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "profile_changed");
+	}
 	@:keep public static inline var SIGNAL_PROFILE_CHANGED:String = "profile_changed";
 }

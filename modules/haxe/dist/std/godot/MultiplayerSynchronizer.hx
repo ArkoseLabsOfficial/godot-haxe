@@ -93,8 +93,26 @@ class MultiplayerSynchronizer extends godot.Node {
 	public function get_visibility_for(peer:Int):Bool {
 		return cast Native.call(__hxgodotId, "get_visibility_for", [peer]);
 	}
+
+	/** `synchronized` signal. */
+	public var synchronized(get, never):godot.Signal;
+	@:noCompletion function get_synchronized():godot.Signal {
+		return godot.Signal.fromObject(this, "synchronized");
+	}
 	@:keep public static inline var SIGNAL_SYNCHRONIZED:String = "synchronized";
+
+	/** `delta_synchronized` signal. */
+	public var delta_synchronized(get, never):godot.Signal;
+	@:noCompletion function get_delta_synchronized():godot.Signal {
+		return godot.Signal.fromObject(this, "delta_synchronized");
+	}
 	@:keep public static inline var SIGNAL_DELTA_SYNCHRONIZED:String = "delta_synchronized";
+
+	/** `visibility_changed` signal. */
+	public var visibility_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_CHANGED:String = "visibility_changed";
 	@:keep public static var VISIBILITY_PROCESS_IDLE:Int = 0;
 	@:keep public static var VISIBILITY_PROCESS_PHYSICS:Int = 1;

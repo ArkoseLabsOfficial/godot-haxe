@@ -32,6 +32,18 @@ class BoneMap extends godot.Resource {
 	public function find_profile_bone_name(skeleton_bone_name:String):String {
 		return cast Native.call(__hxgodotId, "find_profile_bone_name", [skeleton_bone_name]);
 	}
+
+	/** `bone_map_updated` signal. */
+	public var bone_map_updated(get, never):godot.Signal;
+	@:noCompletion function get_bone_map_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "bone_map_updated");
+	}
 	@:keep public static inline var SIGNAL_BONE_MAP_UPDATED:String = "bone_map_updated";
+
+	/** `profile_updated` signal. */
+	public var profile_updated(get, never):godot.Signal;
+	@:noCompletion function get_profile_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "profile_updated");
+	}
 	@:keep public static inline var SIGNAL_PROFILE_UPDATED:String = "profile_updated";
 }

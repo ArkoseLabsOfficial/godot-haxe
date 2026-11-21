@@ -107,10 +107,40 @@ class EditorSpinSlider extends godot.Range {
 	public function is_deferred_drag_mode_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_deferred_drag_mode_enabled", []);
 	}
+
+	/** `grabbed` signal. */
+	public var grabbed(get, never):godot.Signal;
+	@:noCompletion function get_grabbed():godot.Signal {
+		return godot.Signal.fromObject(this, "grabbed");
+	}
 	@:keep public static inline var SIGNAL_GRABBED:String = "grabbed";
+
+	/** `ungrabbed` signal. */
+	public var ungrabbed(get, never):godot.Signal;
+	@:noCompletion function get_ungrabbed():godot.Signal {
+		return godot.Signal.fromObject(this, "ungrabbed");
+	}
 	@:keep public static inline var SIGNAL_UNGRABBED:String = "ungrabbed";
+
+	/** `updown_pressed` signal. */
+	public var updown_pressed(get, never):godot.Signal;
+	@:noCompletion function get_updown_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "updown_pressed");
+	}
 	@:keep public static inline var SIGNAL_UPDOWN_PRESSED:String = "updown_pressed";
+
+	/** `value_focus_entered` signal. */
+	public var value_focus_entered(get, never):godot.Signal;
+	@:noCompletion function get_value_focus_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "value_focus_entered");
+	}
 	@:keep public static inline var SIGNAL_VALUE_FOCUS_ENTERED:String = "value_focus_entered";
+
+	/** `value_focus_exited` signal. */
+	public var value_focus_exited(get, never):godot.Signal;
+	@:noCompletion function get_value_focus_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "value_focus_exited");
+	}
 	@:keep public static inline var SIGNAL_VALUE_FOCUS_EXITED:String = "value_focus_exited";
 	@:keep public static var CONTROL_STATE_DEFAULT:Int = 0;
 	@:keep public static var CONTROL_STATE_PREFER_SLIDER:Int = 1;

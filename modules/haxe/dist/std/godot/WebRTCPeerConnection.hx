@@ -61,8 +61,26 @@ class WebRTCPeerConnection extends godot.RefCounted {
 	public function get_signaling_state():Int {
 		return cast Native.call(__hxgodotId, "get_signaling_state", []);
 	}
+
+	/** `session_description_created` signal. */
+	public var session_description_created(get, never):godot.Signal;
+	@:noCompletion function get_session_description_created():godot.Signal {
+		return godot.Signal.fromObject(this, "session_description_created");
+	}
 	@:keep public static inline var SIGNAL_SESSION_DESCRIPTION_CREATED:String = "session_description_created";
+
+	/** `ice_candidate_created` signal. */
+	public var ice_candidate_created(get, never):godot.Signal;
+	@:noCompletion function get_ice_candidate_created():godot.Signal {
+		return godot.Signal.fromObject(this, "ice_candidate_created");
+	}
 	@:keep public static inline var SIGNAL_ICE_CANDIDATE_CREATED:String = "ice_candidate_created";
+
+	/** `data_channel_received` signal. */
+	public var data_channel_received(get, never):godot.Signal;
+	@:noCompletion function get_data_channel_received():godot.Signal {
+		return godot.Signal.fromObject(this, "data_channel_received");
+	}
 	@:keep public static inline var SIGNAL_DATA_CHANNEL_RECEIVED:String = "data_channel_received";
 	@:keep public static var STATE_NEW:Int = 0;
 	@:keep public static var STATE_CONNECTING:Int = 1;

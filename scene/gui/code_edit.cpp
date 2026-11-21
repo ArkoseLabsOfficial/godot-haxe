@@ -2449,7 +2449,13 @@ void CodeEdit::request_code_completion(bool p_force) {
 	String line = get_line(get_caret_line());
 	int ofs = CLAMP(get_caret_column(), 0, line.length());
 
-	if (ofs > 0 && (is_in_string(get_caret_line(), ofs) != -1 || !is_symbol(line[ofs - 1]) || code_completion_prefixes.has(line[ofs - 1]))) {
+	// `@:` starts a Haxe metadata annotation. The colon is a symbol, so
+	// without this rule completion would only reopen after another character
+	// is typed; requesting it right after `@:` opens the annotation list at
+	// once. No other language uses `@` immediately before a colon.
+	const bool after_metadata_colon = ofs > 1 && line[ofs - 1] == ':' && line[ofs - 2] == '@';
+
+	if (ofs > 0 && (after_metadata_colon || is_in_string(get_caret_line(), ofs) != -1 || !is_symbol(line[ofs - 1]) || code_completion_prefixes.has(line[ofs - 1]))) {
 		emit_signal(SNAME("code_completion_requested"));
 	} else if (ofs > 1 && line[ofs - 1] == ' ' && code_completion_prefixes.has(line[ofs - 2])) {
 		emit_signal(SNAME("code_completion_requested"));

@@ -17,6 +17,12 @@ class EditorInterface extends godot.Object {
 		return cast Native.singleton("EditorInterface");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.EditorInterface;
+	@:noCompletion static function get_singleton():godot.EditorInterface {
+		return cast Native.singleton("EditorInterface");
+	}
+
 	public var distraction_free_mode(get, set):Bool;
 	@:noCompletion function get_distraction_free_mode():Bool {
 		return cast Native.call(__hxgodotId, "is_distraction_free_mode_enabled", []);

@@ -17,6 +17,12 @@ class AudioServer extends godot.Object {
 		return cast Native.singleton("AudioServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.AudioServer;
+	@:noCompletion static function get_singleton():godot.AudioServer {
+		return cast Native.singleton("AudioServer");
+	}
+
 	public var bus_count(get, set):Int;
 	@:noCompletion function get_bus_count():Int {
 		return cast Native.call(__hxgodotId, "get_bus_count", []);
@@ -248,7 +254,19 @@ class AudioServer extends godot.Object {
 	public function register_stream_as_sample(stream:godot.AudioStream):Void {
 		Native.call(__hxgodotId, "register_stream_as_sample", [stream]);
 	}
+
+	/** `bus_layout_changed` signal. */
+	public var bus_layout_changed(get, never):godot.Signal;
+	@:noCompletion function get_bus_layout_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "bus_layout_changed");
+	}
 	@:keep public static inline var SIGNAL_BUS_LAYOUT_CHANGED:String = "bus_layout_changed";
+
+	/** `bus_renamed` signal. */
+	public var bus_renamed(get, never):godot.Signal;
+	@:noCompletion function get_bus_renamed():godot.Signal {
+		return godot.Signal.fromObject(this, "bus_renamed");
+	}
 	@:keep public static inline var SIGNAL_BUS_RENAMED:String = "bus_renamed";
 	@:keep public static var SPEAKER_MODE_STEREO:Int = 0;
 	@:keep public static var SPEAKER_SURROUND_31:Int = 1;

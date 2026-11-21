@@ -269,11 +269,15 @@ void RunInstancesDialog::get_argument_list_for_instance(int p_idx, List<String> 
 	}
 }
 
-void RunInstancesDialog::apply_custom_features(int p_instance_idx) {
-	const InstanceData &instance = instances_data[p_instance_idx];
+Vector<String> RunInstancesDialog::_features_for_instance(int p_instance_idx) const {
+	Vector<String> stripped_features;
+	if (main_features_edit == nullptr || enable_multiple_instances_checkbox == nullptr) {
+		return stripped_features;
+	}
 
 	String raw_text;
-	if (enable_multiple_instances_checkbox->is_pressed()) {
+	if (enable_multiple_instances_checkbox->is_pressed() && p_instance_idx >= 0 && p_instance_idx < instances_data.size()) {
+		const InstanceData &instance = instances_data[p_instance_idx];
 		if (instance.overrides_features()) {
 			raw_text = instance.get_feature_tags();
 		} else {
@@ -283,16 +287,21 @@ void RunInstancesDialog::apply_custom_features(int p_instance_idx) {
 		raw_text = main_features_edit->get_text();
 	}
 
-	const Vector<String> raw_list = raw_text.split(",");
-	Vector<String> stripped_features;
-
-	for (int i = 0; i < raw_list.size(); i++) {
-		String f = raw_list[i].strip_edges();
-		if (!f.is_empty()) {
-			stripped_features.push_back(f);
+	for (const String &f : raw_text.split(",")) {
+		String trimmed = f.strip_edges();
+		if (!trimmed.is_empty()) {
+			stripped_features.push_back(trimmed);
 		}
 	}
-	OS::get_singleton()->set_environment("GODOT_EDITOR_CUSTOM_FEATURES", String(",").join(stripped_features));
+	return stripped_features;
+}
+
+void RunInstancesDialog::apply_custom_features(int p_instance_idx) {
+	OS::get_singleton()->set_environment("GODOT_EDITOR_CUSTOM_FEATURES", String(",").join(_features_for_instance(p_instance_idx)));
+}
+
+Vector<String> RunInstancesDialog::get_run_features(int p_instance_idx) const {
+	return _features_for_instance(p_instance_idx);
 }
 
 RunInstancesDialog::RunInstancesDialog() {

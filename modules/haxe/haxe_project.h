@@ -150,7 +150,17 @@ public:
 
 	static Vector<String> scan_sources();
 	static bool get_class_info(const String &p_path, HaxeClassInfo &r_info);
+	/* Resolves a written type name to a project class only. A name the project
+	 * source tree owns wins; nothing else is consulted, so completion can try
+	 * the engine, the standard library and the project before a library. */
 	static bool get_class_info_by_name(const String &p_name, HaxeClassInfo &r_info, String *r_path = nullptr);
+	/* Resolves a written type name the way the compiler does: a project class
+	 * first, then a class from an installed haxelib. A project class may extend
+	 * a library class, so base resolution and inherited `@:export` members use
+	 * this instead of the project-only lookup. `r_from_library` says whether
+	 * the answer came from a library: such a file is not a project script and
+	 * must not be loaded as one. */
+	static bool resolve_class_info_by_name(const String &p_name, HaxeClassInfo &r_info, String *r_path = nullptr, bool *r_from_library = nullptr);
 	static Vector<HaxeClassInfo> get_all_classes();
 	static void invalidate(const String &p_path = String());
 	/* Replaces the index entry for `p_info.path` with a freshly parsed result
@@ -196,7 +206,57 @@ public:
 	/* Resolves the native ClassDB base class of a script by following Haxe
 	 * inheritance between project scripts. */
 	static String resolve_native_base(const HaxeClassInfo &p_info);
+
+	/* Fully qualified names of the *library* classes that ultimately extend a
+	 * Godot type, so a class from an installed haxelib can be a node/resource
+	 * script. The engine reaches such a class's members by name (an override
+	 * such as `_process`), and `-dce full` cannot see that, so the build marks
+	 * them `@:keep` (see `HaxeBuild::collect_arguments`). Only the classes that
+	 * actually reach a Godot type are returned, by their own name, so an
+	 * unrelated library package is not dragged into the library. */
+	static Vector<String> get_library_script_classes();
+	/* A library class declared `@:globalClass` that reaches a Godot type: it
+	 * can be registered with `ScriptServer` and attached like a project
+	 * script. `path` is the `res://` path its source is loadable from (empty
+	 * for a class outside the project, which cannot be a script resource). */
+	struct LibraryGlobalClass {
+		String name;
+		String path;
+		String native_base;
+		bool is_abstract = false;
+		bool is_tool = false;
+	};
+	static Vector<LibraryGlobalClass> get_library_global_classes();
+	/* Registers the current library global classes with `ScriptServer` and
+	 * drops the ones a removed library or a version switch left behind, so the
+	 * "Create Node" dialog and the Scene dock follow the installed haxelib. */
+	static void sync_library_global_classes();
 	static String get_global_class_name(const String &p_path, String *r_base_type = nullptr, String *r_icon_path = nullptr, bool *r_is_abstract = nullptr, bool *r_is_tool = nullptr);
+
+	/* Native shared libraries ------------------------------------------------
+	 *
+	 * A library built from Haxe links against the native shared objects the
+	 * Haxe libraries it uses need: `libvlc.so` (and `libc++_shared.so`) for
+	 * `hxvlc-godot`, for example. A desktop build finds them in the system, but
+	 * an Android export has to ship the ones a Haxe library bundles inside the
+	 * APK, or the dynamic linker fails to load the Haxe library itself
+	 * ("library libvlc.so not found"). The names are read from the compiled
+	 * library's ELF `DT_NEEDED` entries and the files are located inside the
+	 * project, so a Haxe library that bundles native code works without the
+	 * project having to describe it. */
+	struct NativeLibrary {
+		String name; // The soname, as the dynamic linker looks it up.
+		String path; // The file that provides it.
+	};
+
+	/* The native libraries `p_library_path` needs, directly or transitively,
+	 * that are bundled inside the project (the project directory or its
+	 * project-local `haxelib/`) and built for `p_abi`. A dependency that is not
+	 * found is assumed to be provided by the platform and is left out, which is
+	 * how the Android system libraries (`libc.so`, `liblog.so`, ...) are
+	 * skipped; `r_missing` collects those names so the exporter can report
+	 * them. */
+	static Vector<NativeLibrary> resolve_native_libraries(const String &p_library_path, const String &p_abi, Vector<String> *r_missing = nullptr);
 
 	/* Creates the default project layout (source dir, haxe.json, .gdignore)
 	 * without touching existing files. Returns an error message, empty on

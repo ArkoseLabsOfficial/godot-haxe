@@ -181,6 +181,12 @@ class AnimationNodeBlendSpace2D extends godot.AnimationRootNode {
 	public function is_using_sync():Bool {
 		return cast Native.call(__hxgodotId, "is_using_sync", []);
 	}
+
+	/** `triangles_updated` signal. */
+	public var triangles_updated(get, never):godot.Signal;
+	@:noCompletion function get_triangles_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "triangles_updated");
+	}
 	@:keep public static inline var SIGNAL_TRIANGLES_UPDATED:String = "triangles_updated";
 	@:keep public static var BLEND_MODE_INTERPOLATED:Int = 0;
 	@:keep public static var BLEND_MODE_DISCRETE:Int = 1;

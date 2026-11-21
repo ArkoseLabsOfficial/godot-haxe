@@ -100,6 +100,12 @@ class AnimationNodeStateMachineTransition extends godot.Resource {
 	public function is_reset():Bool {
 		return cast Native.call(__hxgodotId, "is_reset", []);
 	}
+
+	/** `advance_condition_changed` signal. */
+	public var advance_condition_changed(get, never):godot.Signal;
+	@:noCompletion function get_advance_condition_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "advance_condition_changed");
+	}
 	@:keep public static inline var SIGNAL_ADVANCE_CONDITION_CHANGED:String = "advance_condition_changed";
 	@:keep public static var SWITCH_MODE_IMMEDIATE:Int = 0;
 	@:keep public static var SWITCH_MODE_SYNC:Int = 1;

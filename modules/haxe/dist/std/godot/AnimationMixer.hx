@@ -205,12 +205,54 @@ class AnimationMixer extends godot.Node {
 	public function find_animation_library(animation:godot.Animation):String {
 		return cast Native.call(__hxgodotId, "find_animation_library", [animation]);
 	}
+
+	/** `animation_list_changed` signal. */
+	public var animation_list_changed(get, never):godot.Signal;
+	@:noCompletion function get_animation_list_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_list_changed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_LIST_CHANGED:String = "animation_list_changed";
+
+	/** `animation_libraries_updated` signal. */
+	public var animation_libraries_updated(get, never):godot.Signal;
+	@:noCompletion function get_animation_libraries_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_libraries_updated");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_LIBRARIES_UPDATED:String = "animation_libraries_updated";
+
+	/** `animation_finished` signal. */
+	public var animation_finished(get, never):godot.Signal;
+	@:noCompletion function get_animation_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_finished");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_FINISHED:String = "animation_finished";
+
+	/** `animation_started` signal. */
+	public var animation_started(get, never):godot.Signal;
+	@:noCompletion function get_animation_started():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_started");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_STARTED:String = "animation_started";
+
+	/** `caches_cleared` signal. */
+	public var caches_cleared(get, never):godot.Signal;
+	@:noCompletion function get_caches_cleared():godot.Signal {
+		return godot.Signal.fromObject(this, "caches_cleared");
+	}
 	@:keep public static inline var SIGNAL_CACHES_CLEARED:String = "caches_cleared";
+
+	/** `mixer_applied` signal. */
+	public var mixer_applied(get, never):godot.Signal;
+	@:noCompletion function get_mixer_applied():godot.Signal {
+		return godot.Signal.fromObject(this, "mixer_applied");
+	}
 	@:keep public static inline var SIGNAL_MIXER_APPLIED:String = "mixer_applied";
+
+	/** `mixer_updated` signal. */
+	public var mixer_updated(get, never):godot.Signal;
+	@:noCompletion function get_mixer_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "mixer_updated");
+	}
 	@:keep public static inline var SIGNAL_MIXER_UPDATED:String = "mixer_updated";
 	@:keep public static var ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var ANIMATION_CALLBACK_MODE_PROCESS_IDLE:Int = 1;

@@ -17,6 +17,12 @@ class TextServerManager extends godot.Object {
 		return cast Native.singleton("TextServerManager");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.TextServerManager;
+	@:noCompletion static function get_singleton():godot.TextServerManager {
+		return cast Native.singleton("TextServerManager");
+	}
+
 	public function add_interface(interface_:godot.TextServer):Void {
 		Native.call(__hxgodotId, "add_interface", [interface_]);
 	}
@@ -48,6 +54,18 @@ class TextServerManager extends godot.Object {
 	public function get_primary_interface():godot.TextServer {
 		return cast Native.call(__hxgodotId, "get_primary_interface", []);
 	}
+
+	/** `interface_added` signal. */
+	public var interface_added(get, never):godot.Signal;
+	@:noCompletion function get_interface_added():godot.Signal {
+		return godot.Signal.fromObject(this, "interface_added");
+	}
 	@:keep public static inline var SIGNAL_INTERFACE_ADDED:String = "interface_added";
+
+	/** `interface_removed` signal. */
+	public var interface_removed(get, never):godot.Signal;
+	@:noCompletion function get_interface_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "interface_removed");
+	}
 	@:keep public static inline var SIGNAL_INTERFACE_REMOVED:String = "interface_removed";
 }

@@ -89,6 +89,9 @@ class RunInstancesDialog : public AcceptDialog {
 	void _create_instance(InstanceData &p_instance, const Dictionary &p_data, int p_idx);
 	void _save_main_args();
 	void _save_arguments();
+	/* The trimmed feature tags an instance will run with, following the same
+	 * main/override rules as `apply_custom_features()`. */
+	Vector<String> _features_for_instance(int p_instance_idx) const;
 	// Separates command line arguments without splitting up quoted strings.
 	Vector<String> _split_cmdline_args(const String &p_arg_string) const;
 	void _instance_menu_id_pressed(int p_option);
@@ -99,6 +102,14 @@ public:
 	int get_instance_count() const;
 	void get_argument_list_for_instance(int p_idx, List<String> &r_list) const;
 	void apply_custom_features(int p_instance_idx);
+	/* Feature tags of the primary instance (index 0), or of any instance.
+	 *
+	 * The engine has to know them before it starts a build: a Haxe library is
+	 * compiled ahead of time, so a tag such as `MOBILE_BUTTONS` has to be a
+	 * compiler define at build time, not only a runtime feature of the game
+	 * process. `get_run_features()` returns the tags the first instance will
+	 * actually run with, which is the set a Run builds the library for. */
+	Vector<String> get_run_features(int p_instance_idx = 0) const;
 
 	static RunInstancesDialog *get_singleton() { return singleton; }
 	RunInstancesDialog();

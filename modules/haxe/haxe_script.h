@@ -118,6 +118,21 @@ public:
 	int get_member_line(const StringName &p_member) const override;
 	const Variant get_rpc_config() const override;
 
+	/* True when the script or one of its base classes (a project class or a
+	 * class an installed haxelib provides) declares `p_method`.
+	 *
+	 * The engine calls a lifecycle method such as `_ready` when *any* class in
+	 * the chain declares it, not only the script attached to the node: Godot's
+	 * `GDScriptInstance::has_method` walks the base script chain for exactly
+	 * this reason. `has_method()` stays own-only, as `GDScript::has_method`
+	 * does; the script instance answers the engine's queries with this. */
+	bool has_inherited_method(const StringName &p_method) const;
+
+	/* The methods of the script and of every base class it resolves through the
+	 * project/library chain, in chain order, mirroring
+	 * `GDScriptInstance::get_method_list`. */
+	void get_inherited_script_method_list(List<MethodInfo> *p_list) const;
+
 	const HaxeClassInfo &get_class_info() const { return class_info; }
 	String get_haxe_class_name() const { return class_info.fq_name; }
 	String get_native_base_type() const { return native_base_type; }

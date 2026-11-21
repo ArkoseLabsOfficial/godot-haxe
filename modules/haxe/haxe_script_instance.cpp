@@ -86,7 +86,7 @@ bool find_script_member(const HaxeClassInfo &p_info, const StringName &p_name, H
 	while (!base.is_empty() && !visited.has(base)) {
 		visited.insert(base);
 		HaxeClassInfo parent;
-		if (!HaxeProject::get_class_info_by_name(base, parent)) {
+		if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
 			break;
 		}
 		if (const HaxeMemberInfo *member = parent.find_member(p_name)) {
@@ -222,12 +222,12 @@ Object *HaxeScriptInstance::get_owner() {
 
 void HaxeScriptInstance::get_method_list(List<MethodInfo> *p_list) const {
 	if (script.is_valid()) {
-		script->get_script_method_list(p_list);
+		script->get_inherited_script_method_list(p_list);
 	}
 }
 
 bool HaxeScriptInstance::has_method(const StringName &p_method) const {
-	return script.is_valid() && script->has_method(p_method);
+	return script.is_valid() && script->has_inherited_method(p_method);
 }
 
 Variant HaxeScriptInstance::callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
@@ -238,9 +238,10 @@ Variant HaxeScriptInstance::callp(const StringName &p_method, const Variant **p_
 	}
 	// Object::callp dispatches here first for every method, including engine
 	// ones (a Haxe `position` getter calls back into `get_position`). Only
-	// methods the script itself declares may be answered here; anything else
-	// must fall through to the native implementation, exactly like GDScript.
-	if (!script.is_valid() || !script->has_method(p_method)) {
+	// methods the script itself declares -- or inherits from a project or
+	// library base class -- may be answered here; anything else must fall
+	// through to the native implementation, exactly like GDScript.
+	if (!script.is_valid() || !script->has_inherited_method(p_method)) {
 		r_error.error = Callable::CallError::CALL_ERROR_INVALID_METHOD;
 		return Variant();
 	}

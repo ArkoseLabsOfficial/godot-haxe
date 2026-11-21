@@ -17,6 +17,12 @@ class TranslationServer extends godot.Object {
 		return cast Native.singleton("TranslationServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.TranslationServer;
+	@:noCompletion static function get_singleton():godot.TranslationServer {
+		return cast Native.singleton("TranslationServer");
+	}
+
 	public var pseudolocalization_enabled(get, set):Bool;
 	@:noCompletion function get_pseudolocalization_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_pseudolocalization_enabled", []);

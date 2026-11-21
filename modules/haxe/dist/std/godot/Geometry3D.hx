@@ -17,6 +17,12 @@ class Geometry3D extends godot.Object {
 		return cast Native.singleton("Geometry3D");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Geometry3D;
+	@:noCompletion static function get_singleton():godot.Geometry3D {
+		return cast Native.singleton("Geometry3D");
+	}
+
 	public function compute_convex_mesh_points(planes:Array<godot.Plane>):godot.PackedVector3Array {
 		return cast Native.call(__hxgodotId, "compute_convex_mesh_points", [planes]);
 	}

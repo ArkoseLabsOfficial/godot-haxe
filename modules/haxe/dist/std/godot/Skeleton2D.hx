@@ -43,5 +43,11 @@ class Skeleton2D extends godot.Node2D {
 	public function get_bone_local_pose_override(bone_idx:Int):godot.Transform2D {
 		return cast Native.call(__hxgodotId, "get_bone_local_pose_override", [bone_idx]);
 	}
+
+	/** `bone_setup_changed` signal. */
+	public var bone_setup_changed(get, never):godot.Signal;
+	@:noCompletion function get_bone_setup_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "bone_setup_changed");
+	}
 	@:keep public static inline var SIGNAL_BONE_SETUP_CHANGED:String = "bone_setup_changed";
 }

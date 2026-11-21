@@ -59,5 +59,11 @@ class OpenXRPlaneTracker extends godot.OpenXRSpatialEntityTracker {
 	public function get_shape(thickness:Float = 0.01):godot.Shape3D {
 		return cast Native.call(__hxgodotId, "get_shape", [thickness]);
 	}
+
+	/** `mesh_changed` signal. */
+	public var mesh_changed(get, never):godot.Signal;
+	@:noCompletion function get_mesh_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "mesh_changed");
+	}
 	@:keep public static inline var SIGNAL_MESH_CHANGED:String = "mesh_changed";
 }

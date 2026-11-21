@@ -17,6 +17,12 @@ class ClassDB extends godot.Object {
 		return cast Native.singleton("ClassDB");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ClassDB;
+	@:noCompletion static function get_singleton():godot.ClassDB {
+		return cast Native.singleton("ClassDB");
+	}
+
 	public function get_class_list():godot.PackedStringArray {
 		return cast Native.call(__hxgodotId, "get_class_list", []);
 	}

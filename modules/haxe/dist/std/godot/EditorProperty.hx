@@ -209,17 +209,95 @@ class EditorProperty extends godot.Container {
 	public function emit_changed(property:String, value:Dynamic, field:String = "", changing:Bool = false):Void {
 		Native.call(__hxgodotId, "emit_changed", [property, value, field, changing]);
 	}
+
+	/** `property_changed` signal. */
+	public var property_changed(get, never):godot.Signal;
+	@:noCompletion function get_property_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "property_changed");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_CHANGED:String = "property_changed";
+
+	/** `multiple_properties_changed` signal. */
+	public var multiple_properties_changed(get, never):godot.Signal;
+	@:noCompletion function get_multiple_properties_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "multiple_properties_changed");
+	}
 	@:keep public static inline var SIGNAL_MULTIPLE_PROPERTIES_CHANGED:String = "multiple_properties_changed";
+
+	/** `property_keyed` signal. */
+	public var property_keyed(get, never):godot.Signal;
+	@:noCompletion function get_property_keyed():godot.Signal {
+		return godot.Signal.fromObject(this, "property_keyed");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_KEYED:String = "property_keyed";
+
+	/** `property_deleted` signal. */
+	public var property_deleted(get, never):godot.Signal;
+	@:noCompletion function get_property_deleted():godot.Signal {
+		return godot.Signal.fromObject(this, "property_deleted");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_DELETED:String = "property_deleted";
+
+	/** `property_keyed_with_value` signal. */
+	public var property_keyed_with_value(get, never):godot.Signal;
+	@:noCompletion function get_property_keyed_with_value():godot.Signal {
+		return godot.Signal.fromObject(this, "property_keyed_with_value");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_KEYED_WITH_VALUE:String = "property_keyed_with_value";
+
+	/** `property_checked` signal. */
+	public var property_checked(get, never):godot.Signal;
+	@:noCompletion function get_property_checked():godot.Signal {
+		return godot.Signal.fromObject(this, "property_checked");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_CHECKED:String = "property_checked";
+
+	/** `property_overridden` signal. */
+	public var property_overridden(get, never):godot.Signal;
+	@:noCompletion function get_property_overridden():godot.Signal {
+		return godot.Signal.fromObject(this, "property_overridden");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_OVERRIDDEN:String = "property_overridden";
+
+	/** `property_favorited` signal. */
+	public var property_favorited(get, never):godot.Signal;
+	@:noCompletion function get_property_favorited():godot.Signal {
+		return godot.Signal.fromObject(this, "property_favorited");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_FAVORITED:String = "property_favorited";
+
+	/** `property_pinned` signal. */
+	public var property_pinned(get, never):godot.Signal;
+	@:noCompletion function get_property_pinned():godot.Signal {
+		return godot.Signal.fromObject(this, "property_pinned");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_PINNED:String = "property_pinned";
+
+	/** `property_can_revert_changed` signal. */
+	public var property_can_revert_changed(get, never):godot.Signal;
+	@:noCompletion function get_property_can_revert_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "property_can_revert_changed");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_CAN_REVERT_CHANGED:String = "property_can_revert_changed";
+
+	/** `resource_selected` signal. */
+	public var resource_selected(get, never):godot.Signal;
+	@:noCompletion function get_resource_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_selected");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_SELECTED:String = "resource_selected";
+
+	/** `object_id_selected` signal. */
+	public var object_id_selected(get, never):godot.Signal;
+	@:noCompletion function get_object_id_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "object_id_selected");
+	}
 	@:keep public static inline var SIGNAL_OBJECT_ID_SELECTED:String = "object_id_selected";
+
+	/** `selected` signal. */
+	public var selected(get, never):godot.Signal;
+	@:noCompletion function get_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "selected");
+	}
 	@:keep public static inline var SIGNAL_SELECTED:String = "selected";
 }

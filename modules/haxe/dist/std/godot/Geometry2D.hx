@@ -17,6 +17,12 @@ class Geometry2D extends godot.Object {
 		return cast Native.singleton("Geometry2D");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Geometry2D;
+	@:noCompletion static function get_singleton():godot.Geometry2D {
+		return cast Native.singleton("Geometry2D");
+	}
+
 	public function is_point_in_circle(point:godot.Vector2, circle_position:godot.Vector2, circle_radius:Float):Bool {
 		return cast Native.call(__hxgodotId, "is_point_in_circle", [point, circle_position, circle_radius]);
 	}

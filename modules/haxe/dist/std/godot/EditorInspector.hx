@@ -43,13 +43,67 @@ class EditorInspector extends godot.ScrollContainer {
 	public static function create_default_inspector(?filter_line_edit:godot.LineEdit):godot.EditorInspector {
 		return cast Native.callStatic("EditorInspector", "create_default_inspector", [filter_line_edit]);
 	}
+
+	/** `property_selected` signal. */
+	public var property_selected(get, never):godot.Signal;
+	@:noCompletion function get_property_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "property_selected");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_SELECTED:String = "property_selected";
+
+	/** `property_keyed` signal. */
+	public var property_keyed(get, never):godot.Signal;
+	@:noCompletion function get_property_keyed():godot.Signal {
+		return godot.Signal.fromObject(this, "property_keyed");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_KEYED:String = "property_keyed";
+
+	/** `property_deleted` signal. */
+	public var property_deleted(get, never):godot.Signal;
+	@:noCompletion function get_property_deleted():godot.Signal {
+		return godot.Signal.fromObject(this, "property_deleted");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_DELETED:String = "property_deleted";
+
+	/** `resource_selected` signal. */
+	public var resource_selected(get, never):godot.Signal;
+	@:noCompletion function get_resource_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_selected");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_SELECTED:String = "resource_selected";
+
+	/** `object_id_selected` signal. */
+	public var object_id_selected(get, never):godot.Signal;
+	@:noCompletion function get_object_id_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "object_id_selected");
+	}
 	@:keep public static inline var SIGNAL_OBJECT_ID_SELECTED:String = "object_id_selected";
+
+	/** `property_edited` signal. */
+	public var property_edited(get, never):godot.Signal;
+	@:noCompletion function get_property_edited():godot.Signal {
+		return godot.Signal.fromObject(this, "property_edited");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_EDITED:String = "property_edited";
+
+	/** `property_toggled` signal. */
+	public var property_toggled(get, never):godot.Signal;
+	@:noCompletion function get_property_toggled():godot.Signal {
+		return godot.Signal.fromObject(this, "property_toggled");
+	}
 	@:keep public static inline var SIGNAL_PROPERTY_TOGGLED:String = "property_toggled";
+
+	/** `edited_object_changed` signal. */
+	public var edited_object_changed(get, never):godot.Signal;
+	@:noCompletion function get_edited_object_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "edited_object_changed");
+	}
 	@:keep public static inline var SIGNAL_EDITED_OBJECT_CHANGED:String = "edited_object_changed";
+
+	/** `restart_requested` signal. */
+	public var restart_requested(get, never):godot.Signal;
+	@:noCompletion function get_restart_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "restart_requested");
+	}
 	@:keep public static inline var SIGNAL_RESTART_REQUESTED:String = "restart_requested";
 }

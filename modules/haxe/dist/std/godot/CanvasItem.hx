@@ -464,9 +464,33 @@ class CanvasItem extends godot.Node {
 	public function get_clip_children_mode():Int {
 		return cast Native.call(__hxgodotId, "get_clip_children_mode", []);
 	}
+
+	/** `draw` signal. */
+	public var draw(get, never):godot.Signal;
+	@:noCompletion function get_draw():godot.Signal {
+		return godot.Signal.fromObject(this, "draw");
+	}
 	@:keep public static inline var SIGNAL_DRAW:String = "draw";
+
+	/** `visibility_changed` signal. */
+	public var visibility_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_CHANGED:String = "visibility_changed";
+
+	/** `hidden` signal. */
+	public var hidden(get, never):godot.Signal;
+	@:noCompletion function get_hidden():godot.Signal {
+		return godot.Signal.fromObject(this, "hidden");
+	}
 	@:keep public static inline var SIGNAL_HIDDEN:String = "hidden";
+
+	/** `item_rect_changed` signal. */
+	public var item_rect_changed(get, never):godot.Signal;
+	@:noCompletion function get_item_rect_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "item_rect_changed");
+	}
 	@:keep public static inline var SIGNAL_ITEM_RECT_CHANGED:String = "item_rect_changed";
 	@:keep public static var TEXTURE_FILTER_PARENT_NODE:Int = 0;
 	@:keep public static var TEXTURE_FILTER_NEAREST:Int = 1;

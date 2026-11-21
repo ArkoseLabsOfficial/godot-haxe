@@ -539,9 +539,33 @@ class LineEdit extends godot.Control {
 	public function is_select_all_on_focus():Bool {
 		return cast Native.call(__hxgodotId, "is_select_all_on_focus", []);
 	}
+
+	/** `text_changed` signal. */
+	public var text_changed(get, never):godot.Signal;
+	@:noCompletion function get_text_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "text_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXT_CHANGED:String = "text_changed";
+
+	/** `text_change_rejected` signal. */
+	public var text_change_rejected(get, never):godot.Signal;
+	@:noCompletion function get_text_change_rejected():godot.Signal {
+		return godot.Signal.fromObject(this, "text_change_rejected");
+	}
 	@:keep public static inline var SIGNAL_TEXT_CHANGE_REJECTED:String = "text_change_rejected";
+
+	/** `text_submitted` signal. */
+	public var text_submitted(get, never):godot.Signal;
+	@:noCompletion function get_text_submitted():godot.Signal {
+		return godot.Signal.fromObject(this, "text_submitted");
+	}
 	@:keep public static inline var SIGNAL_TEXT_SUBMITTED:String = "text_submitted";
+
+	/** `editing_toggled` signal. */
+	public var editing_toggled(get, never):godot.Signal;
+	@:noCompletion function get_editing_toggled():godot.Signal {
+		return godot.Signal.fromObject(this, "editing_toggled");
+	}
 	@:keep public static inline var SIGNAL_EDITING_TOGGLED:String = "editing_toggled";
 	@:keep public static var MENU_CUT:Int = 0;
 	@:keep public static var MENU_COPY:Int = 1;

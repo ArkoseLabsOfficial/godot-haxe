@@ -24,5 +24,11 @@ class VisualShaderNodeInput extends godot.VisualShaderNode {
 	public function get_input_real_name():String {
 		return cast Native.call(__hxgodotId, "get_input_real_name", []);
 	}
+
+	/** `input_type_changed` signal. */
+	public var input_type_changed(get, never):godot.Signal;
+	@:noCompletion function get_input_type_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "input_type_changed");
+	}
 	@:keep public static inline var SIGNAL_INPUT_TYPE_CHANGED:String = "input_type_changed";
 }

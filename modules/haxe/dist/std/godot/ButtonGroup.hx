@@ -32,5 +32,11 @@ class ButtonGroup extends godot.Resource {
 	public function is_allow_unpress():Bool {
 		return cast Native.call(__hxgodotId, "is_allow_unpress", []);
 	}
+
+	/** `pressed` signal. */
+	public var pressed(get, never):godot.Signal;
+	@:noCompletion function get_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pressed");
+	}
 	@:keep public static inline var SIGNAL_PRESSED:String = "pressed";
 }

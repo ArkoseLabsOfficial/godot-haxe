@@ -183,7 +183,19 @@ class ScrollContainer extends godot.Container {
 	public function ensure_control_visible(control:godot.Control):Void {
 		Native.call(__hxgodotId, "ensure_control_visible", [control]);
 	}
+
+	/** `scroll_started` signal. */
+	public var scroll_started(get, never):godot.Signal;
+	@:noCompletion function get_scroll_started():godot.Signal {
+		return godot.Signal.fromObject(this, "scroll_started");
+	}
 	@:keep public static inline var SIGNAL_SCROLL_STARTED:String = "scroll_started";
+
+	/** `scroll_ended` signal. */
+	public var scroll_ended(get, never):godot.Signal;
+	@:noCompletion function get_scroll_ended():godot.Signal {
+		return godot.Signal.fromObject(this, "scroll_ended");
+	}
 	@:keep public static inline var SIGNAL_SCROLL_ENDED:String = "scroll_ended";
 	@:keep public static var SCROLL_MODE_DISABLED:Int = 0;
 	@:keep public static var SCROLL_MODE_AUTO:Int = 1;

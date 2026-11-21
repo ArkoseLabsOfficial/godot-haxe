@@ -24,5 +24,11 @@ class OpenXRRenderModel extends godot.Node3D {
 	public function get_top_level_path():String {
 		return cast Native.call(__hxgodotId, "get_top_level_path", []);
 	}
+
+	/** `render_model_top_level_path_changed` signal. */
+	public var render_model_top_level_path_changed(get, never):godot.Signal;
+	@:noCompletion function get_render_model_top_level_path_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_top_level_path_changed");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_TOP_LEVEL_PATH_CHANGED:String = "render_model_top_level_path_changed";
 }

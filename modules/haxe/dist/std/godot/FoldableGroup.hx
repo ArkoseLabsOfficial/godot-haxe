@@ -32,5 +32,11 @@ class FoldableGroup extends godot.Resource {
 	public function is_allow_folding_all():Bool {
 		return cast Native.call(__hxgodotId, "is_allow_folding_all", []);
 	}
+
+	/** `expanded` signal. */
+	public var expanded(get, never):godot.Signal;
+	@:noCompletion function get_expanded():godot.Signal {
+		return godot.Signal.fromObject(this, "expanded");
+	}
 	@:keep public static inline var SIGNAL_EXPANDED:String = "expanded";
 }

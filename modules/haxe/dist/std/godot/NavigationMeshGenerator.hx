@@ -17,6 +17,12 @@ class NavigationMeshGenerator extends godot.Object {
 		return cast Native.singleton("NavigationMeshGenerator");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.NavigationMeshGenerator;
+	@:noCompletion static function get_singleton():godot.NavigationMeshGenerator {
+		return cast Native.singleton("NavigationMeshGenerator");
+	}
+
 	public function bake(navigation_mesh:godot.NavigationMesh, root_node:godot.Node):Void {
 		Native.call(__hxgodotId, "bake", [navigation_mesh, root_node]);
 	}

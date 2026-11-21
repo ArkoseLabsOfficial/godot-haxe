@@ -1264,12 +1264,54 @@ class TextEdit extends godot.Control {
 	public function get_selection_column(caret_index:Int = 0):Int {
 		return cast Native.call(__hxgodotId, "get_selection_column", [caret_index]);
 	}
+
+	/** `text_set` signal. */
+	public var text_set(get, never):godot.Signal;
+	@:noCompletion function get_text_set():godot.Signal {
+		return godot.Signal.fromObject(this, "text_set");
+	}
 	@:keep public static inline var SIGNAL_TEXT_SET:String = "text_set";
+
+	/** `text_changed` signal. */
+	public var text_changed(get, never):godot.Signal;
+	@:noCompletion function get_text_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "text_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXT_CHANGED:String = "text_changed";
+
+	/** `lines_edited_from` signal. */
+	public var lines_edited_from(get, never):godot.Signal;
+	@:noCompletion function get_lines_edited_from():godot.Signal {
+		return godot.Signal.fromObject(this, "lines_edited_from");
+	}
 	@:keep public static inline var SIGNAL_LINES_EDITED_FROM:String = "lines_edited_from";
+
+	/** `caret_changed` signal. */
+	public var caret_changed(get, never):godot.Signal;
+	@:noCompletion function get_caret_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "caret_changed");
+	}
 	@:keep public static inline var SIGNAL_CARET_CHANGED:String = "caret_changed";
+
+	/** `gutter_clicked` signal. */
+	public var gutter_clicked(get, never):godot.Signal;
+	@:noCompletion function get_gutter_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "gutter_clicked");
+	}
 	@:keep public static inline var SIGNAL_GUTTER_CLICKED:String = "gutter_clicked";
+
+	/** `gutter_added` signal. */
+	public var gutter_added(get, never):godot.Signal;
+	@:noCompletion function get_gutter_added():godot.Signal {
+		return godot.Signal.fromObject(this, "gutter_added");
+	}
 	@:keep public static inline var SIGNAL_GUTTER_ADDED:String = "gutter_added";
+
+	/** `gutter_removed` signal. */
+	public var gutter_removed(get, never):godot.Signal;
+	@:noCompletion function get_gutter_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "gutter_removed");
+	}
 	@:keep public static inline var SIGNAL_GUTTER_REMOVED:String = "gutter_removed";
 	@:keep public static var MENU_CUT:Int = 0;
 	@:keep public static var MENU_COPY:Int = 1;

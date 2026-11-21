@@ -17,6 +17,12 @@ class Performance extends godot.Object {
 		return cast Native.singleton("Performance");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Performance;
+	@:noCompletion static function get_singleton():godot.Performance {
+		return cast Native.singleton("Performance");
+	}
+
 	public function get_monitor(monitor:Int):Float {
 		return cast Native.call(__hxgodotId, "get_monitor", [monitor]);
 	}

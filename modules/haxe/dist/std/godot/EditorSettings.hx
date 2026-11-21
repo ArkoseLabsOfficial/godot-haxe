@@ -101,5 +101,11 @@ class EditorSettings extends godot.Resource {
 	public function mark_setting_changed(setting:String):Void {
 		Native.call(__hxgodotId, "mark_setting_changed", [setting]);
 	}
+
+	/** `settings_changed` signal. */
+	public var settings_changed(get, never):godot.Signal;
+	@:noCompletion function get_settings_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "settings_changed");
+	}
 	@:keep public static inline var SIGNAL_SETTINGS_CHANGED:String = "settings_changed";
 }

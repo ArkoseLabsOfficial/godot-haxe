@@ -265,13 +265,61 @@ class TabBar extends godot.Control {
 	public function clear_tabs():Void {
 		Native.call(__hxgodotId, "clear_tabs", []);
 	}
+
+	/** `tab_selected` signal. */
+	public var tab_selected(get, never):godot.Signal;
+	@:noCompletion function get_tab_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_selected");
+	}
 	@:keep public static inline var SIGNAL_TAB_SELECTED:String = "tab_selected";
+
+	/** `tab_changed` signal. */
+	public var tab_changed(get, never):godot.Signal;
+	@:noCompletion function get_tab_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_changed");
+	}
 	@:keep public static inline var SIGNAL_TAB_CHANGED:String = "tab_changed";
+
+	/** `tab_clicked` signal. */
+	public var tab_clicked(get, never):godot.Signal;
+	@:noCompletion function get_tab_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_clicked");
+	}
 	@:keep public static inline var SIGNAL_TAB_CLICKED:String = "tab_clicked";
+
+	/** `tab_rmb_clicked` signal. */
+	public var tab_rmb_clicked(get, never):godot.Signal;
+	@:noCompletion function get_tab_rmb_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_rmb_clicked");
+	}
 	@:keep public static inline var SIGNAL_TAB_RMB_CLICKED:String = "tab_rmb_clicked";
+
+	/** `tab_close_pressed` signal. */
+	public var tab_close_pressed(get, never):godot.Signal;
+	@:noCompletion function get_tab_close_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_close_pressed");
+	}
 	@:keep public static inline var SIGNAL_TAB_CLOSE_PRESSED:String = "tab_close_pressed";
+
+	/** `tab_button_pressed` signal. */
+	public var tab_button_pressed(get, never):godot.Signal;
+	@:noCompletion function get_tab_button_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_button_pressed");
+	}
 	@:keep public static inline var SIGNAL_TAB_BUTTON_PRESSED:String = "tab_button_pressed";
+
+	/** `tab_hovered` signal. */
+	public var tab_hovered(get, never):godot.Signal;
+	@:noCompletion function get_tab_hovered():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_hovered");
+	}
 	@:keep public static inline var SIGNAL_TAB_HOVERED:String = "tab_hovered";
+
+	/** `active_tab_rearranged` signal. */
+	public var active_tab_rearranged(get, never):godot.Signal;
+	@:noCompletion function get_active_tab_rearranged():godot.Signal {
+		return godot.Signal.fromObject(this, "active_tab_rearranged");
+	}
 	@:keep public static inline var SIGNAL_ACTIVE_TAB_REARRANGED:String = "active_tab_rearranged";
 	@:keep public static var ALIGNMENT_LEFT:Int = 0;
 	@:keep public static var ALIGNMENT_CENTER:Int = 1;

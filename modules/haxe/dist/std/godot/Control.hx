@@ -1067,15 +1067,75 @@ class Control extends godot.CanvasItem {
 	public function is_localizing_numeral_system():Bool {
 		return cast Native.call(__hxgodotId, "is_localizing_numeral_system", []);
 	}
+
+	/** `resized` signal. */
+	public var resized(get, never):godot.Signal;
+	@:noCompletion function get_resized():godot.Signal {
+		return godot.Signal.fromObject(this, "resized");
+	}
 	@:keep public static inline var SIGNAL_RESIZED:String = "resized";
+
+	/** `gui_input` signal. */
+	public var gui_input(get, never):godot.Signal;
+	@:noCompletion function get_gui_input():godot.Signal {
+		return godot.Signal.fromObject(this, "gui_input");
+	}
 	@:keep public static inline var SIGNAL_GUI_INPUT:String = "gui_input";
+
+	/** `mouse_entered` signal. */
+	public var mouse_entered(get, never):godot.Signal;
+	@:noCompletion function get_mouse_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_entered");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_ENTERED:String = "mouse_entered";
+
+	/** `mouse_exited` signal. */
+	public var mouse_exited(get, never):godot.Signal;
+	@:noCompletion function get_mouse_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_exited");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_EXITED:String = "mouse_exited";
+
+	/** `focus_entered` signal. */
+	public var focus_entered(get, never):godot.Signal;
+	@:noCompletion function get_focus_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "focus_entered");
+	}
 	@:keep public static inline var SIGNAL_FOCUS_ENTERED:String = "focus_entered";
+
+	/** `focus_exited` signal. */
+	public var focus_exited(get, never):godot.Signal;
+	@:noCompletion function get_focus_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "focus_exited");
+	}
 	@:keep public static inline var SIGNAL_FOCUS_EXITED:String = "focus_exited";
+
+	/** `size_flags_changed` signal. */
+	public var size_flags_changed(get, never):godot.Signal;
+	@:noCompletion function get_size_flags_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "size_flags_changed");
+	}
 	@:keep public static inline var SIGNAL_SIZE_FLAGS_CHANGED:String = "size_flags_changed";
+
+	/** `maximum_size_changed` signal. */
+	public var maximum_size_changed(get, never):godot.Signal;
+	@:noCompletion function get_maximum_size_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "maximum_size_changed");
+	}
 	@:keep public static inline var SIGNAL_MAXIMUM_SIZE_CHANGED:String = "maximum_size_changed";
+
+	/** `minimum_size_changed` signal. */
+	public var minimum_size_changed(get, never):godot.Signal;
+	@:noCompletion function get_minimum_size_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "minimum_size_changed");
+	}
 	@:keep public static inline var SIGNAL_MINIMUM_SIZE_CHANGED:String = "minimum_size_changed";
+
+	/** `theme_changed` signal. */
+	public var theme_changed(get, never):godot.Signal;
+	@:noCompletion function get_theme_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "theme_changed");
+	}
 	@:keep public static inline var SIGNAL_THEME_CHANGED:String = "theme_changed";
 	@:keep public static var FOCUS_NONE:Int = 0;
 	@:keep public static var FOCUS_CLICK:Int = 1;

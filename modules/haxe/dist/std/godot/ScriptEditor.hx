@@ -75,6 +75,18 @@ class ScriptEditor extends godot.PanelContainer {
 	public function close_file(path:String):godot.GD.Error {
 		return cast Native.call(__hxgodotId, "close_file", [path]);
 	}
+
+	/** `editor_script_changed` signal. */
+	public var editor_script_changed(get, never):godot.Signal;
+	@:noCompletion function get_editor_script_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "editor_script_changed");
+	}
 	@:keep public static inline var SIGNAL_EDITOR_SCRIPT_CHANGED:String = "editor_script_changed";
+
+	/** `script_close` signal. */
+	public var script_close(get, never):godot.Signal;
+	@:noCompletion function get_script_close():godot.Signal {
+		return godot.Signal.fromObject(this, "script_close");
+	}
 	@:keep public static inline var SIGNAL_SCRIPT_CLOSE:String = "script_close";
 }

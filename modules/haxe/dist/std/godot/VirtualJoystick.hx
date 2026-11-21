@@ -111,10 +111,40 @@ class VirtualJoystick extends godot.Control {
 		Native.call(__hxgodotId, "set_visibility_mode", [value]);
 		return value;
 	}
+
+	/** `pressed` signal. */
+	public var pressed(get, never):godot.Signal;
+	@:noCompletion function get_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pressed");
+	}
 	@:keep public static inline var SIGNAL_PRESSED:String = "pressed";
+
+	/** `tapped` signal. */
+	public var tapped(get, never):godot.Signal;
+	@:noCompletion function get_tapped():godot.Signal {
+		return godot.Signal.fromObject(this, "tapped");
+	}
 	@:keep public static inline var SIGNAL_TAPPED:String = "tapped";
+
+	/** `released` signal. */
+	public var released(get, never):godot.Signal;
+	@:noCompletion function get_released():godot.Signal {
+		return godot.Signal.fromObject(this, "released");
+	}
 	@:keep public static inline var SIGNAL_RELEASED:String = "released";
+
+	/** `flicked` signal. */
+	public var flicked(get, never):godot.Signal;
+	@:noCompletion function get_flicked():godot.Signal {
+		return godot.Signal.fromObject(this, "flicked");
+	}
 	@:keep public static inline var SIGNAL_FLICKED:String = "flicked";
+
+	/** `flick_canceled` signal. */
+	public var flick_canceled(get, never):godot.Signal;
+	@:noCompletion function get_flick_canceled():godot.Signal {
+		return godot.Signal.fromObject(this, "flick_canceled");
+	}
 	@:keep public static inline var SIGNAL_FLICK_CANCELED:String = "flick_canceled";
 	@:keep public static var JOYSTICK_FIXED:Int = 0;
 	@:keep public static var JOYSTICK_DYNAMIC:Int = 1;

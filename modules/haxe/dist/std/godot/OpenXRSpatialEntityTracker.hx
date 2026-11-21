@@ -49,7 +49,19 @@ class OpenXRSpatialEntityTracker extends godot.XRPositionalTracker {
 	public function remove_next(next:godot.OpenXRStructureBase):Void {
 		Native.call(__hxgodotId, "remove_next", [next]);
 	}
+
+	/** `next_changed` signal. */
+	public var next_changed(get, never):godot.Signal;
+	@:noCompletion function get_next_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "next_changed");
+	}
 	@:keep public static inline var SIGNAL_NEXT_CHANGED:String = "next_changed";
+
+	/** `spatial_tracking_state_changed` signal. */
+	public var spatial_tracking_state_changed(get, never):godot.Signal;
+	@:noCompletion function get_spatial_tracking_state_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "spatial_tracking_state_changed");
+	}
 	@:keep public static inline var SIGNAL_SPATIAL_TRACKING_STATE_CHANGED:String = "spatial_tracking_state_changed";
 	@:keep public static var ENTITY_TRACKING_STATE_STOPPED:Int = 1;
 	@:keep public static var ENTITY_TRACKING_STATE_PAUSED:Int = 2;

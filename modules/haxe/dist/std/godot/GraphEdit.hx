@@ -402,24 +402,138 @@ class GraphEdit extends godot.Control {
 	public function set_selected(node:godot.Node):Void {
 		Native.call(__hxgodotId, "set_selected", [node]);
 	}
+
+	/** `connection_request` signal. */
+	public var connection_request(get, never):godot.Signal;
+	@:noCompletion function get_connection_request():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_request");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_REQUEST:String = "connection_request";
+
+	/** `disconnection_request` signal. */
+	public var disconnection_request(get, never):godot.Signal;
+	@:noCompletion function get_disconnection_request():godot.Signal {
+		return godot.Signal.fromObject(this, "disconnection_request");
+	}
 	@:keep public static inline var SIGNAL_DISCONNECTION_REQUEST:String = "disconnection_request";
+
+	/** `connection_to_empty` signal. */
+	public var connection_to_empty(get, never):godot.Signal;
+	@:noCompletion function get_connection_to_empty():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_to_empty");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_TO_EMPTY:String = "connection_to_empty";
+
+	/** `connection_from_empty` signal. */
+	public var connection_from_empty(get, never):godot.Signal;
+	@:noCompletion function get_connection_from_empty():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_from_empty");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_FROM_EMPTY:String = "connection_from_empty";
+
+	/** `connection_drag_started` signal. */
+	public var connection_drag_started(get, never):godot.Signal;
+	@:noCompletion function get_connection_drag_started():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_drag_started");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_DRAG_STARTED:String = "connection_drag_started";
+
+	/** `connection_drag_ended` signal. */
+	public var connection_drag_ended(get, never):godot.Signal;
+	@:noCompletion function get_connection_drag_ended():godot.Signal {
+		return godot.Signal.fromObject(this, "connection_drag_ended");
+	}
 	@:keep public static inline var SIGNAL_CONNECTION_DRAG_ENDED:String = "connection_drag_ended";
+
+	/** `copy_nodes_request` signal. */
+	public var copy_nodes_request(get, never):godot.Signal;
+	@:noCompletion function get_copy_nodes_request():godot.Signal {
+		return godot.Signal.fromObject(this, "copy_nodes_request");
+	}
 	@:keep public static inline var SIGNAL_COPY_NODES_REQUEST:String = "copy_nodes_request";
+
+	/** `cut_nodes_request` signal. */
+	public var cut_nodes_request(get, never):godot.Signal;
+	@:noCompletion function get_cut_nodes_request():godot.Signal {
+		return godot.Signal.fromObject(this, "cut_nodes_request");
+	}
 	@:keep public static inline var SIGNAL_CUT_NODES_REQUEST:String = "cut_nodes_request";
+
+	/** `paste_nodes_request` signal. */
+	public var paste_nodes_request(get, never):godot.Signal;
+	@:noCompletion function get_paste_nodes_request():godot.Signal {
+		return godot.Signal.fromObject(this, "paste_nodes_request");
+	}
 	@:keep public static inline var SIGNAL_PASTE_NODES_REQUEST:String = "paste_nodes_request";
+
+	/** `duplicate_nodes_request` signal. */
+	public var duplicate_nodes_request(get, never):godot.Signal;
+	@:noCompletion function get_duplicate_nodes_request():godot.Signal {
+		return godot.Signal.fromObject(this, "duplicate_nodes_request");
+	}
 	@:keep public static inline var SIGNAL_DUPLICATE_NODES_REQUEST:String = "duplicate_nodes_request";
+
+	/** `delete_nodes_request` signal. */
+	public var delete_nodes_request(get, never):godot.Signal;
+	@:noCompletion function get_delete_nodes_request():godot.Signal {
+		return godot.Signal.fromObject(this, "delete_nodes_request");
+	}
 	@:keep public static inline var SIGNAL_DELETE_NODES_REQUEST:String = "delete_nodes_request";
+
+	/** `node_selected` signal. */
+	public var node_selected(get, never):godot.Signal;
+	@:noCompletion function get_node_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "node_selected");
+	}
 	@:keep public static inline var SIGNAL_NODE_SELECTED:String = "node_selected";
+
+	/** `node_deselected` signal. */
+	public var node_deselected(get, never):godot.Signal;
+	@:noCompletion function get_node_deselected():godot.Signal {
+		return godot.Signal.fromObject(this, "node_deselected");
+	}
 	@:keep public static inline var SIGNAL_NODE_DESELECTED:String = "node_deselected";
+
+	/** `frame_rect_changed` signal. */
+	public var frame_rect_changed(get, never):godot.Signal;
+	@:noCompletion function get_frame_rect_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_rect_changed");
+	}
 	@:keep public static inline var SIGNAL_FRAME_RECT_CHANGED:String = "frame_rect_changed";
+
+	/** `popup_request` signal. */
+	public var popup_request(get, never):godot.Signal;
+	@:noCompletion function get_popup_request():godot.Signal {
+		return godot.Signal.fromObject(this, "popup_request");
+	}
 	@:keep public static inline var SIGNAL_POPUP_REQUEST:String = "popup_request";
+
+	/** `begin_node_move` signal. */
+	public var begin_node_move(get, never):godot.Signal;
+	@:noCompletion function get_begin_node_move():godot.Signal {
+		return godot.Signal.fromObject(this, "begin_node_move");
+	}
 	@:keep public static inline var SIGNAL_BEGIN_NODE_MOVE:String = "begin_node_move";
+
+	/** `end_node_move` signal. */
+	public var end_node_move(get, never):godot.Signal;
+	@:noCompletion function get_end_node_move():godot.Signal {
+		return godot.Signal.fromObject(this, "end_node_move");
+	}
 	@:keep public static inline var SIGNAL_END_NODE_MOVE:String = "end_node_move";
+
+	/** `graph_elements_linked_to_frame_request` signal. */
+	public var graph_elements_linked_to_frame_request(get, never):godot.Signal;
+	@:noCompletion function get_graph_elements_linked_to_frame_request():godot.Signal {
+		return godot.Signal.fromObject(this, "graph_elements_linked_to_frame_request");
+	}
 	@:keep public static inline var SIGNAL_GRAPH_ELEMENTS_LINKED_TO_FRAME_REQUEST:String = "graph_elements_linked_to_frame_request";
+
+	/** `scroll_offset_changed` signal. */
+	public var scroll_offset_changed(get, never):godot.Signal;
+	@:noCompletion function get_scroll_offset_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "scroll_offset_changed");
+	}
 	@:keep public static inline var SIGNAL_SCROLL_OFFSET_CHANGED:String = "scroll_offset_changed";
 	@:keep public static var SCROLL_ZOOMS:Int = 0;
 	@:keep public static var SCROLL_PANS:Int = 1;

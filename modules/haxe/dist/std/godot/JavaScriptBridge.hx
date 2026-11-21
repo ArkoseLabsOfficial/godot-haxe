@@ -17,6 +17,12 @@ class JavaScriptBridge extends godot.Object {
 		return cast Native.singleton("JavaScriptBridge");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.JavaScriptBridge;
+	@:noCompletion static function get_singleton():godot.JavaScriptBridge {
+		return cast Native.singleton("JavaScriptBridge");
+	}
+
 	public function eval(code:String, use_global_execution_context:Bool = false):Dynamic {
 		return cast Native.call(__hxgodotId, "eval", [code, use_global_execution_context]);
 	}
@@ -57,6 +63,12 @@ class JavaScriptBridge extends godot.Object {
 
 	public function force_fs_sync():Void {
 		Native.call(__hxgodotId, "force_fs_sync", []);
+	}
+
+	/** `pwa_update_available` signal. */
+	public var pwa_update_available(get, never):godot.Signal;
+	@:noCompletion function get_pwa_update_available():godot.Signal {
+		return godot.Signal.fromObject(this, "pwa_update_available");
 	}
 	@:keep public static inline var SIGNAL_PWA_UPDATE_AVAILABLE:String = "pwa_update_available";
 }

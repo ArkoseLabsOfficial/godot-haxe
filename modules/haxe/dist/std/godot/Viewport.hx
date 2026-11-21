@@ -735,7 +735,19 @@ class Viewport extends godot.Node {
 	public function is_using_xr():Bool {
 		return cast Native.call(__hxgodotId, "is_using_xr", []);
 	}
+
+	/** `size_changed` signal. */
+	public var size_changed(get, never):godot.Signal;
+	@:noCompletion function get_size_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "size_changed");
+	}
 	@:keep public static inline var SIGNAL_SIZE_CHANGED:String = "size_changed";
+
+	/** `gui_focus_changed` signal. */
+	public var gui_focus_changed(get, never):godot.Signal;
+	@:noCompletion function get_gui_focus_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "gui_focus_changed");
+	}
 	@:keep public static inline var SIGNAL_GUI_FOCUS_CHANGED:String = "gui_focus_changed";
 	@:keep public static var SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED:Int = 0;
 	@:keep public static var SHADOW_ATLAS_QUADRANT_SUBDIV_1:Int = 1;

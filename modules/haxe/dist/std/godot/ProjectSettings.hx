@@ -17,6 +17,12 @@ class ProjectSettings extends godot.Object {
 		return cast Native.singleton("ProjectSettings");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ProjectSettings;
+	@:noCompletion static function get_singleton():godot.ProjectSettings {
+		return cast Native.singleton("ProjectSettings");
+	}
+
 	public function has_setting(name:String):Bool {
 		return cast Native.call(__hxgodotId, "has_setting", [name]);
 	}
@@ -99,6 +105,12 @@ class ProjectSettings extends godot.Object {
 
 	public function check_changed_settings_in_group(setting_prefix:String):Bool {
 		return cast Native.call(__hxgodotId, "check_changed_settings_in_group", [setting_prefix]);
+	}
+
+	/** `settings_changed` signal. */
+	public var settings_changed(get, never):godot.Signal;
+	@:noCompletion function get_settings_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "settings_changed");
 	}
 	@:keep public static inline var SIGNAL_SETTINGS_CHANGED:String = "settings_changed";
 }

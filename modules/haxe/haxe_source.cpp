@@ -59,6 +59,41 @@ struct DocComment {
 	int end_offset = 0;
 };
 
+/* True when the token stream holds nothing but a module header: `package` /
+ * `import` / `using` statements, metadata and comments.
+ *
+ * The editor lets a `.hx` file be created empty (from the FileSystem dock, an
+ * external editor or a `touch`), exactly as it lets an empty GDScript be
+ * created. Such a file has no type declaration yet, but it is not a syntax
+ * error: it is a valid module that the user is about to fill in. Only a file
+ * that already contains real code but no type is a genuine error. */
+bool tokens_are_header_only(const Vector<Token> &p_tokens) {
+	int i = 0;
+	while (i < p_tokens.size()) {
+		const Token &token = p_tokens[i];
+		if (token.type == TOK_EOF) {
+			return true;
+		}
+		if (token.type == TOK_META) {
+			i++;
+			continue;
+		}
+		if (token.type == TOK_IDENT && (token.text == "package" || token.text == "import" || token.text == "using")) {
+			i++;
+			// Skip to the terminating `;`. A header statement never contains a
+			// block, so a missing `;` simply runs to the end of the file.
+			while (i < p_tokens.size() && p_tokens[i].type != TOK_EOF &&
+					!(p_tokens[i].type == TOK_SYMBOL && p_tokens[i].text == ";")) {
+				i++;
+			}
+			i++;
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
 /* Doc comments are plain text: drop the leading `*` of each line and the
  * indentation, but keep the line breaks. */
 String clean_doc_comment(const String &p_text) {
@@ -401,6 +436,15 @@ public:
 			}
 		}
 		if (class_index < 0) {
+			if (tokens_are_header_only(tokens)) {
+				// Empty or header-only module (a freshly created `.hx`, or a
+				// file whose class has not been written yet). It is valid, but
+				// has no type: `can_instantiate()` reports that separately.
+				info.valid = true;
+				info.name = String();
+				info.fq_name = String();
+				return OK;
+			}
 			info.error = "No type declaration found.";
 			return ERR_PARSE_ERROR;
 		}
@@ -1399,6 +1443,38 @@ Error parse_haxe_source(const String &p_source, const String &p_path, HaxeClassI
 	r_info.path = p_path;
 	SourceParser parser(p_source, r_info);
 	return parser.parse();
+}
+
+bool haxe_module_find_type(const HaxeClassInfo &p_file_info, const String &p_fq_name, HaxeClassInfo &r_info) {
+	String short_name = p_fq_name;
+	int separator = short_name.rfind(".");
+	if (separator >= 0) {
+		short_name = short_name.substr(separator + 1);
+	}
+	if (p_file_info.name == short_name || p_file_info.fq_name == p_fq_name) {
+		r_info = p_file_info;
+		r_info.fq_name = p_fq_name;
+		return true;
+	}
+	for (const HaxeSecondaryTypeInfo &type : p_file_info.secondary_types) {
+		if (type.name != short_name) {
+			continue;
+		}
+		r_info = HaxeClassInfo();
+		r_info.valid = true;
+		r_info.path = p_file_info.path;
+		r_info.package = p_file_info.package;
+		r_info.name = type.name;
+		r_info.base = type.base;
+		r_info.class_line = type.line;
+		r_info.is_abstract = type.is_abstract;
+		r_info.fq_name = p_fq_name;
+		r_info.members = type.members;
+		r_info.variables = type.variables;
+		r_info.functions = type.functions;
+		return true;
+	}
+	return false;
 }
 
 Variant::Type haxe_type_to_variant(const String &p_type, String &r_class_name) {

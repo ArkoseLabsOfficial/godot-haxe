@@ -54,6 +54,12 @@ class AnimationTree extends godot.AnimationMixer {
 	public function get_process_callback():Int {
 		return cast Native.call(__hxgodotId, "get_process_callback", []);
 	}
+
+	/** `animation_player_changed` signal. */
+	public var animation_player_changed(get, never):godot.Signal;
+	@:noCompletion function get_animation_player_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_player_changed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_PLAYER_CHANGED:String = "animation_player_changed";
 	@:keep public static var ANIMATION_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var ANIMATION_PROCESS_IDLE:Int = 1;

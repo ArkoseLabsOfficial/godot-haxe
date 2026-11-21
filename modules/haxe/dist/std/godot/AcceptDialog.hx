@@ -112,7 +112,25 @@ class AcceptDialog extends godot.Window {
 	public function has_autowrap():Bool {
 		return cast Native.call(__hxgodotId, "has_autowrap", []);
 	}
+
+	/** `confirmed` signal. */
+	public var confirmed(get, never):godot.Signal;
+	@:noCompletion function get_confirmed():godot.Signal {
+		return godot.Signal.fromObject(this, "confirmed");
+	}
 	@:keep public static inline var SIGNAL_CONFIRMED:String = "confirmed";
+
+	/** `canceled` signal. */
+	public var canceled(get, never):godot.Signal;
+	@:noCompletion function get_canceled():godot.Signal {
+		return godot.Signal.fromObject(this, "canceled");
+	}
 	@:keep public static inline var SIGNAL_CANCELED:String = "canceled";
+
+	/** `custom_action` signal. */
+	public var custom_action(get, never):godot.Signal;
+	@:noCompletion function get_custom_action():godot.Signal {
+		return godot.Signal.fromObject(this, "custom_action");
+	}
 	@:keep public static inline var SIGNAL_CUSTOM_ACTION:String = "custom_action";
 }

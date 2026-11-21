@@ -320,10 +320,40 @@ class RigidBody2D extends godot.PhysicsBody2D {
 	public function get_colliding_bodies():Array<godot.Node2D> {
 		return cast Native.call(__hxgodotId, "get_colliding_bodies", []);
 	}
+
+	/** `body_shape_entered` signal. */
+	public var body_shape_entered(get, never):godot.Signal;
+	@:noCompletion function get_body_shape_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "body_shape_entered");
+	}
 	@:keep public static inline var SIGNAL_BODY_SHAPE_ENTERED:String = "body_shape_entered";
+
+	/** `body_shape_exited` signal. */
+	public var body_shape_exited(get, never):godot.Signal;
+	@:noCompletion function get_body_shape_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "body_shape_exited");
+	}
 	@:keep public static inline var SIGNAL_BODY_SHAPE_EXITED:String = "body_shape_exited";
+
+	/** `body_entered` signal. */
+	public var body_entered(get, never):godot.Signal;
+	@:noCompletion function get_body_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "body_entered");
+	}
 	@:keep public static inline var SIGNAL_BODY_ENTERED:String = "body_entered";
+
+	/** `body_exited` signal. */
+	public var body_exited(get, never):godot.Signal;
+	@:noCompletion function get_body_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "body_exited");
+	}
 	@:keep public static inline var SIGNAL_BODY_EXITED:String = "body_exited";
+
+	/** `sleeping_state_changed` signal. */
+	public var sleeping_state_changed(get, never):godot.Signal;
+	@:noCompletion function get_sleeping_state_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "sleeping_state_changed");
+	}
 	@:keep public static inline var SIGNAL_SLEEPING_STATE_CHANGED:String = "sleeping_state_changed";
 	@:keep public static var FREEZE_MODE_STATIC:Int = 0;
 	@:keep public static var FREEZE_MODE_KINEMATIC:Int = 1;

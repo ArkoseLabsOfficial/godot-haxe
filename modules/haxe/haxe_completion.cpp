@@ -31,6 +31,8 @@
 #include "haxe_completion.h"
 
 #include "haxe_api_index.h"
+#include "haxe_gdscript.h"
+#include "haxe_library_index.h"
 #include "haxe_project.h"
 #include "haxe_runtime.h"
 #include "haxe_source.h"
@@ -253,6 +255,10 @@ struct ResolvedType {
 	bool project = false;
 	bool bridge = false;
 	bool std = false;
+	/* A type installed as a Haxe library. */
+	bool library = false;
+	/* A GDScript global class (`class_name X`) of the project. */
+	bool gdscript = false;
 	bool valid = false;
 };
 
@@ -378,6 +384,15 @@ ResolvedType classify_type(const String &p_type) {
 		result.valid = true;
 		return result;
 	}
+	/* A GDScript global class. Its name is a plain identifier, so it is
+	 * matched by what was written. */
+	HaxeGDScriptLibrary *gdscript = HaxeGDScriptLibrary::get_singleton();
+	if (gdscript->has_type(name)) {
+		result.name = name;
+		result.gdscript = true;
+		result.valid = true;
+		return result;
+	}
 	/* A qualified standard library type (`haxe.io.Bytes`) is matched by its
 	 * full name. A bare name only matches a top level type, so `haxe.Resource`
 	 * cannot take the place of the engine's `Resource`. */
@@ -385,6 +400,15 @@ ResolvedType classify_type(const String &p_type) {
 	if (name.contains(".") && stdlib->has_type(name)) {
 		result.name = name;
 		result.std = true;
+		result.valid = true;
+		return result;
+	}
+	/* A qualified library type (`hxbit.Serializable`) is matched by its full
+	 * name as well; a bare name is matched further down, after the engine. */
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	if (name.contains(".") && libraries->has_type(name)) {
+		result.name = name;
+		result.library = true;
 		result.valid = true;
 		return result;
 	}
@@ -396,6 +420,15 @@ ResolvedType classify_type(const String &p_type) {
 	if (stdlib->has_type(short_name)) {
 		result.name = short_name;
 		result.std = true;
+		result.valid = true;
+		return result;
+	}
+	/* A bare library type resolves when the installed libraries agree on one
+	 * declaration; the engine and the standard library were tried first, so a
+	 * library can never shadow them. */
+	if (libraries->has_type(short_name)) {
+		result.name = short_name;
+		result.library = true;
 		result.valid = true;
 	}
 	return result;
@@ -626,13 +659,17 @@ ResolvedType resolve_member_type(const ResolvedType &p_owner, const String &p_me
 	if (!p_owner.valid) {
 		return result;
 	}
-	if (p_owner.project || p_owner.bridge || p_owner.std) {
+	if (p_owner.project || p_owner.bridge || p_owner.std || p_owner.library || p_owner.gdscript) {
 		HaxeClassInfo info;
 		bool found = false;
 		if (p_owner.project) {
 			found = HaxeProject::get_class_info_by_name(p_owner.name, info);
 		} else if (p_owner.bridge) {
 			found = find_bridge_class(p_owner.name, info);
+		} else if (p_owner.library) {
+			found = HaxeLibraryIndex::get_singleton()->get_type_info(p_owner.name, info);
+		} else if (p_owner.gdscript) {
+			found = HaxeGDScriptLibrary::get_singleton()->get_type_info(p_owner.name, info);
 		} else {
 			found = HaxeStdLibrary::get_singleton()->get_type_info(p_owner.name, info);
 		}
@@ -680,6 +717,107 @@ String receiver_segment_name(const String &p_segment) {
 	return paren < 0 ? p_segment : p_segment.substr(0, paren).strip_edges();
 }
 
+/* Splits the argument list of a call segment (`get_node("X", Sprite2D)`) at
+ * its top level commas. Returns an empty list when the segment is not a
+ * balanced call. */
+Vector<String> split_call_arguments(const String &p_segment) {
+	Vector<String> arguments;
+	int open = p_segment.find("(");
+	if (open < 0) {
+		return arguments;
+	}
+	int depth = 0;
+	int start = open + 1;
+	for (int i = open; i < p_segment.length(); i++) {
+		char32_t c = p_segment[i];
+		if (c == '(' || c == '[' || c == '{') {
+			depth++;
+		} else if (c == ')' || c == ']' || c == '}') {
+			depth--;
+			if (depth == 0) {
+				arguments.push_back(p_segment.substr(start, i - start));
+				return arguments;
+			}
+		} else if (c == ',' && depth == 1) {
+			arguments.push_back(p_segment.substr(start, i - start));
+			start = i + 1;
+		}
+	}
+	return arguments;
+}
+
+/* True when an argument is a bare type name (`Sprite2D`, `godot.Node2D`): no
+ * operators, quotes, argument lists or literals. */
+bool looks_like_type_argument(const String &p_argument) {
+	String text = p_argument.strip_edges();
+	if (text.is_empty()) {
+		return false;
+	}
+	char32_t first = text[0];
+	if (!((first >= 'A' && first <= 'Z') || first == '_')) {
+		return false;
+	}
+	for (int i = 0; i < text.length(); i++) {
+		char32_t c = text[i];
+		if (c == '.' || c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+/* A trailing bare type argument (`get_node("X", Sprite2D)`) refines the result
+ * of a call to that type, the way Haxe's `Class<T>` overloads do. Returns an
+ * invalid type when the last argument is not a type. */
+ResolvedType trailing_type_argument(const String &p_segment) {
+	Vector<String> arguments = split_call_arguments(p_segment);
+	if (arguments.size() < 2) {
+		return ResolvedType();
+	}
+	String last = arguments[arguments.size() - 1];
+	if (!looks_like_type_argument(last)) {
+		return ResolvedType();
+	}
+	return classify_type(last);
+}
+
+/* The result of a call segment (`get_node("X")`, `Vector2(1, 2)`,
+ * `cast(value, Sprite2D)`). `p_owner` is the type the call is a member of (the
+ * edited class for a bare call such as `get_parent()`).
+ */
+ResolvedType resolve_call_segment(const ResolvedType &p_owner, const String &p_segment) {
+	// `cast(value, Type)` names the target type directly.
+	String text = p_segment.strip_edges();
+	if (text.begins_with("cast(")) {
+		ResolvedType cast = trailing_type_argument(text);
+		if (cast.valid) {
+			return cast;
+		}
+	}
+	String callee = receiver_segment_name(p_segment);
+	ResolvedType ordinary;
+	if (p_owner.valid) {
+		ordinary = resolve_member_type(p_owner, callee, false);
+	}
+	if (!ordinary.valid) {
+		// A constructor call (`Vector2(1, 2).x`) names a type directly.
+		ordinary = classify_type(callee);
+	}
+	// A typed accessor (`get_node("X", Sprite2D)`) or a call whose result is a
+	// generic engine object is refined by a trailing type argument.
+	ResolvedType type_argument = trailing_type_argument(p_segment);
+	if (type_argument.valid) {
+		bool untyped_result = !ordinary.valid || ordinary.name == "Node" || ordinary.name == "Object" ||
+				ordinary.name == "Resource" || ordinary.name == "RefCounted" ||
+				ordinary.name == "Variant" || ordinary.name == "Dynamic" || ordinary.name == "Any";
+		if (untyped_result) {
+			return type_argument;
+		}
+	}
+	return ordinary;
+}
+
 /* Resolves the receiver of a member access. Returns an invalid type when the
  * receiver is not understood.
  *
@@ -721,22 +859,17 @@ ResolvedType resolve_receiver(const CompletionContext &p_context, const String &
 	} else if (r_locals.has(first)) {
 		result = classify_type(r_locals[first]);
 	} else if (first.contains("(")) {
-		/* A call result at the head of the receiver (`get_parent().add_child`):
-		 * the value is whatever the called member returns, and the call has to
-		 * read as an implicit-`this` member of the edited class. */
-		String callee = receiver_segment_name(first);
+		/* A call result at the head of the receiver (`get_parent().add_child`,
+		 * `cast(x, Sprite2D).position`): the value is whatever the called
+		 * member returns, read as an implicit-`this` member of the edited
+		 * class. `cast` and a trailing type argument name the type directly. */
+		ResolvedType self_type;
 		if (has_script) {
-			ResolvedType self_type;
 			self_type.name = script_info.fq_name.is_empty() ? script_info.name : script_info.fq_name;
 			self_type.project = true;
 			self_type.valid = true;
-			result = resolve_member_type(self_type, callee, false);
 		}
-		if (!result.valid) {
-			// A constructor call (`Vector2(1, 2).x`) names a type directly
-			// instead of a member of the edited class.
-			result = classify_type(callee);
-		}
+		result = resolve_call_segment(self_type, first);
 		if (!result.valid) {
 			return result;
 		}
@@ -769,7 +902,12 @@ ResolvedType resolve_receiver(const CompletionContext &p_context, const String &
 	for (int i = index; i < p_context.receiver.size(); i++) {
 		// A call segment (`get_parent()`) resolves through the called member's
 		// return type, so members of a call result complete.
-		result = resolve_member_type(result, receiver_segment_name(p_context.receiver[i]), r_is_static);
+		const String &segment = p_context.receiver[i];
+		if (segment.contains("(")) {
+			result = resolve_call_segment(result, segment);
+		} else {
+			result = resolve_member_type(result, receiver_segment_name(segment), r_is_static);
+		}
 		if (!result.valid) {
 			return result;
 		}
@@ -850,6 +988,9 @@ void add_engine_members(const CompletionContext &p_context, const String &p_clas
 				} else if (kind == "enum") {
 					include = true;
 					completion_kind = ScriptLanguage::CODE_COMPLETION_KIND_ENUM;
+				} else if (kind == "static_property") {
+					include = true;
+					completion_kind = ScriptLanguage::CODE_COMPLETION_KIND_MEMBER;
 				}
 			} else {
 				if (!p_include_instance) {
@@ -877,31 +1018,28 @@ void add_engine_members(const CompletionContext &p_context, const String &p_clas
 	}
 }
 
-void add_member_options(const CompletionContext &p_context, const ResolvedType &p_owner, bool p_include_static, bool p_include_instance, List<ScriptLanguage::CodeCompletionOption> *r_options) {
-	HashSet<String> seen;
+void add_member_options_seen(const CompletionContext &p_context, const ResolvedType &p_owner, bool p_include_static, bool p_include_instance, HashSet<String> &seen, List<ScriptLanguage::CodeCompletionOption> *r_options) {
 	String current = p_owner.name;
 	bool project = p_owner.project;
 	bool std = p_owner.std;
+	bool library = p_owner.library;
+	bool gdscript = p_owner.gdscript;
 	int guard = 0;
 	while (!current.is_empty() && guard++ < 64) {
+		HaxeClassInfo info;
+		bool categorized = project || std || library || gdscript;
+		bool found = false;
 		if (project) {
-			HaxeClassInfo info;
-			if (!HaxeProject::get_class_info_by_name(current, info)) {
-				break;
-			}
-			add_project_members(p_context, info, p_include_static, p_include_instance, seen, r_options);
-			ResolvedType parent = classify_type(info.base);
-			if (!parent.valid) {
-				break;
-			}
-			current = parent.name;
-			project = parent.project;
-			std = parent.std;
-			continue;
+			found = HaxeProject::get_class_info_by_name(current, info);
+		} else if (std) {
+			found = HaxeStdLibrary::get_singleton()->get_type_info(current, info);
+		} else if (library) {
+			found = HaxeLibraryIndex::get_singleton()->get_type_info(current, info);
+		} else if (gdscript) {
+			found = HaxeGDScriptLibrary::get_singleton()->get_type_info(current, info);
 		}
-		if (std) {
-			HaxeClassInfo info;
-			if (!HaxeStdLibrary::get_singleton()->get_type_info(current, info)) {
+		if (categorized) {
+			if (!found) {
 				break;
 			}
 			add_project_members(p_context, info, p_include_static, p_include_instance, seen, r_options);
@@ -912,6 +1050,8 @@ void add_member_options(const CompletionContext &p_context, const ResolvedType &
 			current = parent.name;
 			project = parent.project;
 			std = parent.std;
+			library = parent.library;
+			gdscript = parent.gdscript;
 			continue;
 		}
 		HaxeClassInfo bridge;
@@ -924,11 +1064,18 @@ void add_member_options(const CompletionContext &p_context, const ResolvedType &
 			current = parent.name;
 			project = parent.project;
 			std = parent.std;
+			library = parent.library;
+			gdscript = parent.gdscript;
 			continue;
 		}
 		add_engine_members(p_context, current, p_include_static, p_include_instance, seen, r_options);
 		break;
 	}
+}
+
+void add_member_options(const CompletionContext &p_context, const ResolvedType &p_owner, bool p_include_static, bool p_include_instance, List<ScriptLanguage::CodeCompletionOption> *r_options) {
+	HashSet<String> seen;
+	add_member_options_seen(p_context, p_owner, p_include_static, p_include_instance, seen, r_options);
 }
 
 void add_class_options(const CompletionContext &p_context, List<ScriptLanguage::CodeCompletionOption> *r_options) {
@@ -946,6 +1093,15 @@ void add_class_options(const CompletionContext &p_context, List<ScriptLanguage::
 		if (name.is_empty() || seen.has(name) || !prefix_matches(name, p_context.prefix)) {
 			continue;
 		}
+		add_option(r_options, name, name, ScriptLanguage::CODE_COMPLETION_KIND_CLASS, ScriptLanguage::LOCATION_OTHER_USER_CODE);
+	}
+	/* The project's GDScript global classes, so a Haxe script can name one
+	 * (`MyClass.staticFunction()`, `get_node("x", MyClass)`). */
+	for (const String &name : HaxeGDScriptLibrary::get_singleton()->get_type_names()) {
+		if (name.is_empty() || seen.has(name) || !prefix_matches(name, p_context.prefix)) {
+			continue;
+		}
+		seen.insert(name);
 		add_option(r_options, name, name, ScriptLanguage::CODE_COMPLETION_KIND_CLASS, ScriptLanguage::LOCATION_OTHER_USER_CODE);
 	}
 	for (const String &name : index->get_global_enum_names()) {
@@ -967,6 +1123,18 @@ void add_class_options(const CompletionContext &p_context, List<ScriptLanguage::
 	HaxeStdLibrary *stdlib = HaxeStdLibrary::get_singleton();
 	if (stdlib->ensure_indexed()) {
 		for (const String &name : stdlib->get_type_names()) {
+			if (seen.has(name) || !prefix_matches(name, p_context.prefix)) {
+				continue;
+			}
+			seen.insert(name);
+			add_option(r_options, name, name, ScriptLanguage::CODE_COMPLETION_KIND_CLASS, ScriptLanguage::LOCATION_OTHER);
+		}
+	}
+	/* Installed libraries, by their full name, so a class from `hxbit`,
+	 * `heaps`, ... is offered just like the standard library's. */
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	if (libraries->ensure_indexed()) {
+		for (const String &name : libraries->get_type_names()) {
 			if (seen.has(name) || !prefix_matches(name, p_context.prefix)) {
 				continue;
 			}
@@ -1013,6 +1181,17 @@ void add_import_options(const CompletionContext &p_context, List<ScriptLanguage:
 		HaxeStdLibrary *stdlib = HaxeStdLibrary::get_singleton();
 		if (stdlib->ensure_indexed()) {
 			for (const String &root : stdlib->get_subpackages(String())) {
+				if (seen.has(root) || !prefix_matches(root, p_context.prefix)) {
+					continue;
+				}
+				seen.insert(root);
+				add_option(r_options, root, root, ScriptLanguage::CODE_COMPLETION_KIND_PLAIN_TEXT, ScriptLanguage::LOCATION_OTHER);
+			}
+		}
+		// Top level packages of the installed libraries.
+		HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+		if (libraries->ensure_indexed()) {
+			for (const String &root : libraries->get_subpackages(String())) {
 				if (seen.has(root) || !prefix_matches(root, p_context.prefix)) {
 					continue;
 				}
@@ -1112,6 +1291,25 @@ void add_import_options(const CompletionContext &p_context, List<ScriptLanguage:
 			add_option(r_options, sub_package, sub_package, ScriptLanguage::CODE_COMPLETION_KIND_PLAIN_TEXT, ScriptLanguage::LOCATION_OTHER);
 		}
 	}
+
+	// Installed library types and packages at the typed path (`import hxbit.`).
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	if (libraries->ensure_indexed()) {
+		for (const String &short_name : libraries->get_package_types(package)) {
+			if (seen.has(short_name) || !prefix_matches(short_name, p_context.prefix)) {
+				continue;
+			}
+			seen.insert(short_name);
+			add_option(r_options, short_name, short_name, ScriptLanguage::CODE_COMPLETION_KIND_CLASS, ScriptLanguage::LOCATION_OTHER);
+		}
+		for (const String &sub_package : libraries->get_subpackages(package)) {
+			if (seen.has(sub_package) || !prefix_matches(sub_package, p_context.prefix)) {
+				continue;
+			}
+			seen.insert(sub_package);
+			add_option(r_options, sub_package, sub_package, ScriptLanguage::CODE_COMPLETION_KIND_PLAIN_TEXT, ScriptLanguage::LOCATION_OTHER);
+		}
+	}
 }
 
 void add_keyword_options(const CompletionContext &p_context, List<ScriptLanguage::CodeCompletionOption> *r_options) {
@@ -1132,10 +1330,15 @@ void add_keyword_options(const CompletionContext &p_context, List<ScriptLanguage
 	}
 }
 
-/* The annotations the Haxe module interprets. Keep this list in sync with the
- * checks in haxe_source.cpp and with HAXE_LANGUAGE.md. */
+/* The annotations offered after `@` / `@:`.
+ *
+ * The first block is the metadata the Haxe module itself interprets; keep it in
+ * sync with the checks in haxe_source.cpp, with `HaxeLanguage::get_public_annotations()`
+ * and with HAXE_LANGUAGE.md. The second block is the metadata the Haxe compiler
+ * understands, so the editor suggests the annotations a user coming from the
+ * Haxe ecosystem expects. */
 void add_metadata_options(const CompletionContext &p_context, List<ScriptLanguage::CodeCompletionOption> *r_options) {
-	static const char *ANNOTATIONS[] = {
+	static const char *MODULE_ANNOTATIONS[] = {
 		"abstract",
 		"editor",
 		"export", "exported",
@@ -1148,16 +1351,36 @@ void add_metadata_options(const CompletionContext &p_context, List<ScriptLanguag
 		"tool",
 		nullptr
 	};
-	for (int i = 0; ANNOTATIONS[i] != nullptr; i++) {
-		String name = ANNOTATIONS[i];
-		if (!prefix_matches(name, p_context.prefix)) {
-			continue;
+	/* Metadata recognized by the Haxe compiler (the standard set from the
+	 * manual's "Metadata" page). */
+	static const char *HAXE_ANNOTATIONS[] = {
+		"abstract", "access", "allow", "arrayAccess", "autoBuild", "bind", "build",
+		"compilerGenerated", "coreApi", "coreType", "cpp", "cs", "deprecated", "doc",
+		"dce", "enum", "event", "expose", "extern", "final", "forward", "forwardStatics",
+		"from", "functionCode", "generic", "genericBuild", "getter", "hack", "headerClassCode",
+		"headerCode", "hxGen", "implicitCast", "include", "inline", "js", "java", "keep",
+		"keepSub", "macro", "multiType", "native", "nativeGen", "noCompletion", "noClosure",
+		"noDebug", "noInline", "noPackageRestrict", "noUsing", "nonVirtual", "ns", "op",
+		"overload", "override", "php", "privateAccess", "protected", "python", "realPosition",
+		"resolve", "runtimeValue", "setter", "sideEffect", "structInit", "this", "unbound",
+		"unifyMinDynamic", "unreflective", "unused", "used", "value",
+		nullptr
+	};
+	HashSet<String> seen;
+	const char *const *sets[] = { MODULE_ANNOTATIONS, HAXE_ANNOTATIONS };
+	for (const char *const *set : sets) {
+		for (int i = 0; set[i] != nullptr; i++) {
+			String name = set[i];
+			if (seen.has(name) || !prefix_matches(name, p_context.prefix)) {
+				continue;
+			}
+			seen.insert(name);
+			// The `@:` already typed stays in place; after a bare `@` the
+			// colon is inserted with the name (`@` + `:export`).
+			String display = p_context.metadata_has_colon ? name : "@:" + name;
+			String insert = p_context.metadata_has_colon ? name : ":" + name;
+			add_option(r_options, display, insert, ScriptLanguage::CODE_COMPLETION_KIND_PLAIN_TEXT, ScriptLanguage::LOCATION_OTHER);
 		}
-		// The `@:` already typed stays in place; after a bare `@` the whole
-		// annotation is inserted.
-		String display = p_context.metadata_has_colon ? name : "@:" + name;
-		String insert = p_context.metadata_has_colon ? name : ":" + name;
-		add_option(r_options, display, insert, ScriptLanguage::CODE_COMPLETION_KIND_PLAIN_TEXT, ScriptLanguage::LOCATION_OTHER);
 	}
 }
 
@@ -1183,7 +1406,7 @@ void add_scope_options(const CompletionContext &p_context, const String &p_scrip
 				break;
 			}
 			if (!parent.project) {
-				add_engine_members(p_context, parent.name, true, true, seen, r_options);
+				add_member_options_seen(p_context, parent, true, true, seen, r_options);
 				break;
 			}
 			current = parent.name;
@@ -1281,6 +1504,18 @@ Error haxe_complete_code(const String &p_code, const String &p_path, Object *p_o
 			 * values. Instance members, including engine methods such as
 			 * `call()` or `callv()`, only make sense after an instance. */
 			add_member_options(context, owner, is_static, !is_static, r_options);
+		} else {
+			/* The receiver may be a package path rather than a type
+			 * (`mygame.entities.`). In Haxe a package is not a value, so
+			 * nothing classifies as a receiver, but the user is still naming
+			 * the next step of a qualified type: offer the sub-packages and
+			 * types the path contains, exactly as an import line does. A
+			 * receiver that names no package (`someVariable.`) offers
+			 * nothing, so a typo never drowns the list in unrelated names. */
+			CompletionContext package_context = context;
+			package_context.import_position = true;
+			package_context.import_prefix = join_receiver(context.receiver, context.receiver.size());
+			add_import_options(package_context, r_options);
 		}
 		if (r_options->is_empty()) {
 			// Unknown receiver: offering the class list would be wrong.
@@ -1350,6 +1585,16 @@ Error haxe_lookup_code(const String &p_code, const String &p_symbol, const Strin
 		return OK;
 	}
 
+	// A GDScript global class of the project.
+	HaxeClassInfo gdscript_class;
+	if (HaxeGDScriptLibrary::get_singleton()->get_type_info(p_symbol, gdscript_class)) {
+		r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS;
+		r_result.class_name = p_symbol;
+		r_result.script_path = gdscript_class.path;
+		r_result.location = gdscript_class.class_line + 1;
+		return OK;
+	}
+
 	// A bridge class (`GD`, `hxgodot.Native`, ...), which declares real
 	// members in the support files.
 	HaxeClassInfo bridge_class;
@@ -1388,6 +1633,16 @@ Error haxe_lookup_code(const String &p_code, const String &p_symbol, const Strin
 		return OK;
 	}
 
+	// A type from an installed Haxe library.
+	HaxeClassInfo library_class;
+	if (HaxeLibraryIndex::get_singleton()->get_type_info(p_symbol, library_class)) {
+		r_result.type = ScriptLanguage::LOOKUP_RESULT_CLASS;
+		r_result.class_name = library_class.fq_name.is_empty() ? library_class.name : library_class.fq_name;
+		r_result.script_path = library_class.path;
+		r_result.location = library_class.class_line + 1;
+		return OK;
+	}
+
 	// A member reached through the receiver under the caret (`self.position.x`).
 	CompletionContext context;
 	if (analyze_code(p_code, context) && context.member_access) {
@@ -1397,10 +1652,12 @@ Error haxe_lookup_code(const String &p_code, const String &p_symbol, const Strin
 		// The caret is after the final dot, so the receiver stops at the
 		// previous segment and `p_symbol` is the member being looked up.
 		if (owner.valid) {
-			if (owner.project || owner.bridge || owner.std) {
+			if (owner.project || owner.bridge || owner.std || owner.library || owner.gdscript) {
 				HaxeClassInfo info;
 				bool found = owner.project ? HaxeProject::get_class_info_by_name(owner.name, info)
 						: owner.bridge	   ? find_bridge_class(owner.name, info)
+						: owner.library	   ? HaxeLibraryIndex::get_singleton()->get_type_info(owner.name, info)
+						: owner.gdscript   ? HaxeGDScriptLibrary::get_singleton()->get_type_info(owner.name, info)
 										   : HaxeStdLibrary::get_singleton()->get_type_info(owner.name, info);
 				if (found) {
 					const HaxeMemberInfo *member = info.find_variable(p_symbol);

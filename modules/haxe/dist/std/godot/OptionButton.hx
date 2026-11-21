@@ -211,6 +211,18 @@ class OptionButton extends godot.Button {
 	public function set_disable_shortcuts(disabled:Bool):Void {
 		Native.call(__hxgodotId, "set_disable_shortcuts", [disabled]);
 	}
+
+	/** `item_selected` signal. */
+	public var item_selected(get, never):godot.Signal;
+	@:noCompletion function get_item_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "item_selected");
+	}
 	@:keep public static inline var SIGNAL_ITEM_SELECTED:String = "item_selected";
+
+	/** `item_focused` signal. */
+	public var item_focused(get, never):godot.Signal;
+	@:noCompletion function get_item_focused():godot.Signal {
+		return godot.Signal.fromObject(this, "item_focused");
+	}
 	@:keep public static inline var SIGNAL_ITEM_FOCUSED:String = "item_focused";
 }

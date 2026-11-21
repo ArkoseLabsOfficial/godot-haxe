@@ -63,6 +63,32 @@ private:
 	Variant previous;
 };
 
+/* Points the project's haxelib directory at `p_dir` while this object exists,
+ * so completion resolves the libraries installed there, then restores the
+ * previous setting and drops the cached library index. */
+class HaxelibDirScope {
+public:
+	explicit HaxelibDirScope(const String &p_dir);
+	~HaxelibDirScope();
+
+private:
+	bool had_setting = false;
+	Variant previous;
+};
+
+/* Registers a GDScript global class with the script server while this object
+ * exists and removes it afterwards, so completion sees it exactly as it would
+ * in a project with a `class_name`. The script is expected to exist on disk at
+ * `p_path`. */
+class GDScriptGlobalClassScope {
+public:
+	GDScriptGlobalClassScope(const String &p_name, const String &p_base, const String &p_path);
+	~GDScriptGlobalClassScope();
+
+private:
+	String name;
+};
+
 /* Runs completion on `p_code` and returns the displayed option names. */
 HashSet<String> completion_names(const String &p_code, const String &p_path = String());
 

@@ -38,5 +38,11 @@ class MainLoop extends godot.Object {
 
 	public function _finalize():Void {
 	}
+
+	/** `on_request_permissions_result` signal. */
+	public var on_request_permissions_result(get, never):godot.Signal;
+	@:noCompletion function get_on_request_permissions_result():godot.Signal {
+		return godot.Signal.fromObject(this, "on_request_permissions_result");
+	}
 	@:keep public static inline var SIGNAL_ON_REQUEST_PERMISSIONS_RESULT:String = "on_request_permissions_result";
 }

@@ -29,13 +29,16 @@
 /**************************************************************************/
 
 #include "../haxe_completion.h"
+#include "../haxe_gdscript.h"
 #include "../haxe_language.h"
+#include "../haxe_library_index.h"
 #include "../haxe_project.h"
 #include "test_haxe_utils.h"
 
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/object/script_language.h"
 #include "core/os/os.h"
 
 namespace TestHaxe {
@@ -101,6 +104,37 @@ SourceDirScope::~SourceDirScope() {
 		settings->clear(HaxeProject::SETTING_SOURCE_DIR);
 	}
 	HaxeProject::invalidate();
+}
+
+HaxelibDirScope::HaxelibDirScope(const String &p_dir) {
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	had_setting = settings->has_setting(HaxeProject::SETTING_HAXELIB_DIR);
+	if (had_setting) {
+		previous = settings->get(HaxeProject::SETTING_HAXELIB_DIR);
+	}
+	settings->set(HaxeProject::SETTING_HAXELIB_DIR, p_dir);
+	HaxeLibraryIndex::get_singleton()->invalidate();
+}
+
+HaxelibDirScope::~HaxelibDirScope() {
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	if (had_setting) {
+		settings->set(HaxeProject::SETTING_HAXELIB_DIR, previous);
+	} else {
+		settings->clear(HaxeProject::SETTING_HAXELIB_DIR);
+	}
+	HaxeLibraryIndex::get_singleton()->invalidate();
+}
+
+GDScriptGlobalClassScope::GDScriptGlobalClassScope(const String &p_name, const String &p_base, const String &p_path) {
+	name = p_name;
+	ScriptServer::add_global_class(p_name, p_base, "GDScript", p_path, false, false);
+	HaxeGDScriptLibrary::get_singleton()->invalidate();
+}
+
+GDScriptGlobalClassScope::~GDScriptGlobalClassScope() {
+	ScriptServer::remove_global_class(name);
+	HaxeGDScriptLibrary::get_singleton()->invalidate();
 }
 
 HashSet<String> completion_names(const String &p_code, const String &p_path) {

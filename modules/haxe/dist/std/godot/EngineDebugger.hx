@@ -17,6 +17,12 @@ class EngineDebugger extends godot.Object {
 		return cast Native.singleton("EngineDebugger");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.EngineDebugger;
+	@:noCompletion static function get_singleton():godot.EngineDebugger {
+		return cast Native.singleton("EngineDebugger");
+	}
+
 	public function is_active():Bool {
 		return cast Native.call(__hxgodotId, "is_active", []);
 	}

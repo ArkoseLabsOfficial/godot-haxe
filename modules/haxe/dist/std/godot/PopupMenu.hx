@@ -465,8 +465,32 @@ class PopupMenu extends godot.Popup {
 	public function is_search_bar_fuzzy_search_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_search_bar_fuzzy_search_enabled", []);
 	}
+
+	/** `id_pressed` signal. */
+	public var id_pressed(get, never):godot.Signal;
+	@:noCompletion function get_id_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "id_pressed");
+	}
 	@:keep public static inline var SIGNAL_ID_PRESSED:String = "id_pressed";
+
+	/** `id_focused` signal. */
+	public var id_focused(get, never):godot.Signal;
+	@:noCompletion function get_id_focused():godot.Signal {
+		return godot.Signal.fromObject(this, "id_focused");
+	}
 	@:keep public static inline var SIGNAL_ID_FOCUSED:String = "id_focused";
+
+	/** `index_pressed` signal. */
+	public var index_pressed(get, never):godot.Signal;
+	@:noCompletion function get_index_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "index_pressed");
+	}
 	@:keep public static inline var SIGNAL_INDEX_PRESSED:String = "index_pressed";
+
+	/** `menu_changed` signal. */
+	public var menu_changed(get, never):godot.Signal;
+	@:noCompletion function get_menu_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "menu_changed");
+	}
 	@:keep public static inline var SIGNAL_MENU_CHANGED:String = "menu_changed";
 }

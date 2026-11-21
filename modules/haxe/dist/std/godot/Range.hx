@@ -164,6 +164,18 @@ class Range extends godot.Control {
 	public function unshare():Void {
 		Native.call(__hxgodotId, "unshare", []);
 	}
+
+	/** `value_changed` signal. */
+	public var value_changed(get, never):godot.Signal;
+	@:noCompletion function get_value_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "value_changed");
+	}
 	@:keep public static inline var SIGNAL_VALUE_CHANGED:String = "value_changed";
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
 }

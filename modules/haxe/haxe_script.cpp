@@ -56,7 +56,7 @@ Vector<HaxeMemberInfo> collect_exported_members(const HaxeClassInfo &p_info) {
 	while (!base.is_empty() && !visited.has(base)) {
 		visited.insert(base);
 		HaxeClassInfo parent;
-		if (!HaxeProject::get_class_info_by_name(base, parent)) {
+		if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
 			break;
 		}
 		for (const HaxeMemberInfo &member : parent.members) {
@@ -69,6 +69,25 @@ Vector<HaxeMemberInfo> collect_exported_members(const HaxeClassInfo &p_info) {
 		base = parent.base;
 	}
 	return members;
+}
+
+/* Walks the base chain (project classes first, then library classes) and calls
+ * `p_visit` for each class, starting with the class itself. Stops on a cycle or
+ * a base that cannot be resolved. */
+template <typename F>
+void for_each_base_class(const HaxeClassInfo &p_info, F p_visit) {
+	p_visit(p_info);
+	HashSet<String> visited;
+	String base = p_info.base;
+	while (!base.is_empty() && !visited.has(base)) {
+		visited.insert(base);
+		HaxeClassInfo parent;
+		if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
+			break;
+		}
+		p_visit(parent);
+		base = parent.base;
+	}
 }
 
 } // namespace
@@ -168,12 +187,28 @@ Error HaxeScript::load_source_code(const String &p_path) {
 	}
 
 	native_base_type = HaxeProject::resolve_native_base(class_info);
+	if (class_info.name.is_empty()) {
+		// A valid module without a type yet (a freshly created or still empty
+		// `.hx`). It loads and can be edited; it just cannot be attached until
+		// a class is written. This mirrors an empty GDScript, which also loads
+		// without being instantiable.
+		load_error = String();
+		emit_changed();
+		return OK;
+	}
 	if (native_base_type.is_empty()) {
-		load_error = vformat("Cannot resolve the native base class of '%s' (extends %s). The base must be a Godot class or another Haxe script in this project.",
+		// A Haxe class that does not reach a Godot type — a macro class, a
+		// plain helper type, or a class extending a type only the compiler
+		// knows — is still a valid `.hx` module. It is not a Godot script
+		// (it cannot be attached or instantiated, see `is_valid()`), but the
+		// editor has to open and edit it, exactly like GDScript accepts a
+		// script whose `extends` the engine cannot resolve and lets the
+		// compiler report a real problem. `load_error` describes why the file
+		// is not attachable; it is deliberately not printed as an error.
+		load_error = vformat("'%s' (extends %s) does not extend a Godot class, so it is not a script that can be attached. The base must be a Godot class or another Haxe script in this project.",
 				class_info.name, class_info.base);
-		class_info.valid = false;
-		ERR_PRINT(vformat("%s: %s", p_path, load_error));
-		return ERR_PARSE_ERROR;
+		emit_changed();
+		return OK;
 	}
 
 	load_error = String();
@@ -237,6 +272,12 @@ bool HaxeScript::can_instantiate() const {
 	if (!class_info.valid || class_info.is_abstract || class_info.fq_name.is_empty()) {
 		return false;
 	}
+	// A class that does not reach a Godot type (a macro or helper class, see
+	// `load_source_code`) has no native base to attach the instance to, so it
+	// cannot be instantiated even though the file loaded and is editable.
+	if (native_base_type.is_empty()) {
+		return false;
+	}
 #ifdef TOOLS_ENABLED
 	// Only `@:tool` classes are compiled into the editor library, so a regular
 	// class cannot be instantiated in the editor. A placeholder instance is
@@ -262,10 +303,14 @@ Ref<Script> HaxeScript::get_base_script() const {
 	}
 	HaxeClassInfo parent;
 	String parent_path;
-	if (!HaxeProject::get_class_info_by_name(class_info.base, parent, &parent_path)) {
+	bool from_library = false;
+	if (!HaxeProject::resolve_class_info_by_name(class_info.base, parent, &parent_path, &from_library)) {
 		return Ref<Script>();
 	}
-	if (parent_path == get_path()) {
+	if (parent_path == get_path() || from_library) {
+		// A base from an installed haxelib is not a project script: it has no
+		// editable resource, so it must not be handed out as one. The class
+		// chain and its exported members still resolve through the index.
 		return Ref<Script>();
 	}
 	return ResourceLoader::load(parent_path, "Script");
@@ -297,7 +342,7 @@ bool HaxeScript::inherits_script(const Ref<Script> &p_script) const {
 		}
 		visited.insert(base);
 		HaxeClassInfo parent;
-		if (!HaxeProject::get_class_info_by_name(base, parent)) {
+		if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
 			return false;
 		}
 		base = parent.base;
@@ -477,7 +522,14 @@ bool HaxeScript::is_tool() const {
 }
 
 bool HaxeScript::is_valid() const {
-	return class_info.valid && !native_base_type.is_empty();
+	if (!class_info.valid) {
+		return false;
+	}
+	// A module without a type yet (a freshly created or still empty `.hx`) has
+	// no native base, but it parsed cleanly and can be edited; it becomes a
+	// script once a class is written. A *named* class with no resolved base is
+	// the real error case and stays invalid.
+	return !native_base_type.is_empty() || class_info.name.is_empty();
 }
 
 bool HaxeScript::is_abstract() const {
@@ -513,7 +565,7 @@ bool HaxeScript::get_property_default_value(const StringName &p_property, Varian
 		while (!base.is_empty() && !visited.has(base)) {
 			visited.insert(base);
 			HaxeClassInfo parent;
-			if (!HaxeProject::get_class_info_by_name(base, parent)) {
+			if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
 				break;
 			}
 			member = parent.find_member(p_property);
@@ -537,6 +589,26 @@ void HaxeScript::get_script_method_list(List<MethodInfo> *p_list) const {
 		}
 		p_list->push_back(function.to_method_info());
 	}
+}
+
+bool HaxeScript::has_inherited_method(const StringName &p_method) const {
+	bool found = false;
+	for_each_base_class(class_info, [&](const HaxeClassInfo &p_class) {
+		if (!found && p_class.find_function(p_method) != nullptr) {
+			found = true;
+		}
+	});
+	return found;
+}
+
+void HaxeScript::get_inherited_script_method_list(List<MethodInfo> *p_list) const {
+	for_each_base_class(class_info, [&](const HaxeClassInfo &p_class) {
+		for (const HaxeFunctionInfo &function : p_class.functions) {
+			if (!function.is_signal) {
+				p_list->push_back(function.to_method_info());
+			}
+		}
+	});
 }
 
 void HaxeScript::get_script_property_list(List<PropertyInfo> *p_list) const {
@@ -585,7 +657,7 @@ int HaxeScript::get_member_line(const StringName &p_member) const {
 	while (!base.is_empty() && !visited.has(base)) {
 		visited.insert(base);
 		HaxeClassInfo parent;
-		if (!HaxeProject::get_class_info_by_name(base, parent)) {
+		if (!HaxeProject::resolve_class_info_by_name(base, parent)) {
 			break;
 		}
 		if (const HaxeMemberInfo *base_member = parent.find_member(p_member)) {

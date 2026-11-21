@@ -17,6 +17,12 @@ class Time extends godot.Object {
 		return cast Native.singleton("Time");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Time;
+	@:noCompletion static function get_singleton():godot.Time {
+		return cast Native.singleton("Time");
+	}
+
 	public function get_datetime_dict_from_unix_time(unix_time_val:Int):godot.Dictionary {
 		return cast Native.call(__hxgodotId, "get_datetime_dict_from_unix_time", [unix_time_val]);
 	}

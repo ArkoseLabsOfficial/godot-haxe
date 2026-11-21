@@ -802,6 +802,12 @@ class CPUParticles3D extends godot.GeometryInstance3D {
 	public function convert_from_particles(particles:godot.Node):Void {
 		Native.call(__hxgodotId, "convert_from_particles", [particles]);
 	}
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 	@:keep public static var DRAW_ORDER_INDEX:Int = 0;
 	@:keep public static var DRAW_ORDER_LIFETIME:Int = 1;

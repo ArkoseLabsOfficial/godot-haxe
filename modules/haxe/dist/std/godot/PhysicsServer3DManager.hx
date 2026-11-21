@@ -17,6 +17,12 @@ class PhysicsServer3DManager extends godot.Object {
 		return cast Native.singleton("PhysicsServer3DManager");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.PhysicsServer3DManager;
+	@:noCompletion static function get_singleton():godot.PhysicsServer3DManager {
+		return cast Native.singleton("PhysicsServer3DManager");
+	}
+
 	public function register_server(name:String, create_callback:Dynamic):Void {
 		Native.call(__hxgodotId, "register_server", [name, create_callback]);
 	}

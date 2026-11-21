@@ -39,8 +39,32 @@ class AnimationLibrary extends godot.Resource {
 	public function get_animation_list_size():Int {
 		return cast Native.call(__hxgodotId, "get_animation_list_size", []);
 	}
+
+	/** `animation_added` signal. */
+	public var animation_added(get, never):godot.Signal;
+	@:noCompletion function get_animation_added():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_added");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_ADDED:String = "animation_added";
+
+	/** `animation_removed` signal. */
+	public var animation_removed(get, never):godot.Signal;
+	@:noCompletion function get_animation_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_removed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_REMOVED:String = "animation_removed";
+
+	/** `animation_renamed` signal. */
+	public var animation_renamed(get, never):godot.Signal;
+	@:noCompletion function get_animation_renamed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_renamed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_RENAMED:String = "animation_renamed";
+
+	/** `animation_changed` signal. */
+	public var animation_changed(get, never):godot.Signal;
+	@:noCompletion function get_animation_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_changed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_CHANGED:String = "animation_changed";
 }

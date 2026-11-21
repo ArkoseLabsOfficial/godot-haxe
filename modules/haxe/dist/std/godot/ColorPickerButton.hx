@@ -63,7 +63,25 @@ class ColorPickerButton extends godot.Button {
 	public function is_editing_intensity():Bool {
 		return cast Native.call(__hxgodotId, "is_editing_intensity", []);
 	}
+
+	/** `color_changed` signal. */
+	public var color_changed(get, never):godot.Signal;
+	@:noCompletion function get_color_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "color_changed");
+	}
 	@:keep public static inline var SIGNAL_COLOR_CHANGED:String = "color_changed";
+
+	/** `popup_closed` signal. */
+	public var popup_closed(get, never):godot.Signal;
+	@:noCompletion function get_popup_closed():godot.Signal {
+		return godot.Signal.fromObject(this, "popup_closed");
+	}
 	@:keep public static inline var SIGNAL_POPUP_CLOSED:String = "popup_closed";
+
+	/** `picker_created` signal. */
+	public var picker_created(get, never):godot.Signal;
+	@:noCompletion function get_picker_created():godot.Signal {
+		return godot.Signal.fromObject(this, "picker_created");
+	}
 	@:keep public static inline var SIGNAL_PICKER_CREATED:String = "picker_created";
 }

@@ -17,6 +17,12 @@ class AccessibilityServer extends godot.Object {
 		return cast Native.singleton("AccessibilityServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.AccessibilityServer;
+	@:noCompletion static function get_singleton():godot.AccessibilityServer {
+		return cast Native.singleton("AccessibilityServer");
+	}
+
 	public function is_supported():Bool {
 		return cast Native.call(__hxgodotId, "is_supported", []);
 	}

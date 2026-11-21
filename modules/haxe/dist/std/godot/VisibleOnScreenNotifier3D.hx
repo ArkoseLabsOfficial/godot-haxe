@@ -25,6 +25,18 @@ class VisibleOnScreenNotifier3D extends godot.VisualInstance3D {
 	public function is_on_screen():Bool {
 		return cast Native.call(__hxgodotId, "is_on_screen", []);
 	}
+
+	/** `screen_entered` signal. */
+	public var screen_entered(get, never):godot.Signal;
+	@:noCompletion function get_screen_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "screen_entered");
+	}
 	@:keep public static inline var SIGNAL_SCREEN_ENTERED:String = "screen_entered";
+
+	/** `screen_exited` signal. */
+	public var screen_exited(get, never):godot.Signal;
+	@:noCompletion function get_screen_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "screen_exited");
+	}
 	@:keep public static inline var SIGNAL_SCREEN_EXITED:String = "screen_exited";
 }

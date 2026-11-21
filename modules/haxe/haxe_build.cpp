@@ -30,6 +30,7 @@
 
 #include "haxe_build.h"
 
+#include "haxe_gdscript.h"
 #include "haxe_project.h"
 #include "haxe_runtime.h"
 
@@ -87,6 +88,47 @@ String sanitize_json_version(const Variant &p_value) {
 	return p_value;
 }
 
+/* haxelib stores a dotted library name as a directory whose dots are commas,
+ * so `thx.core` is installed in `thx,core/`, and it encodes the version
+ * directory the same way (`0.44.0` lives in `0,44,0/`). The `.current` file,
+ * `haxelib.json` and every command line argument keep the dotted form. The
+ * editor and the manifest deal in dotted names and versions, so both
+ * directions are converted wherever the filesystem is crossed. Without this,
+ * a dependency `thx.core` looks for `thx.core/` (which never exists) and the
+ * version list looks for `0.44.0/` instead of `0,44,0/`, so an installed
+ * library is reported as missing. */
+String haxelib_repo_name(const String &p_display_name) {
+	return p_display_name.replace(".", ",");
+}
+
+String haxelib_display_name(const String &p_repo_name) {
+	return p_repo_name.replace(",", ".");
+}
+
+String haxelib_version_dir(const String &p_version) {
+	return p_version.replace(".", ",");
+}
+
+String haxelib_display_version(const String &p_version_dir) {
+	return p_version_dir.replace(",", ".");
+}
+
+/* The directory that holds `p_version` inside a library, whichever encoding is
+ * on disk. haxelib writes the comma form (`0,44,0`), while a library copied in
+ * by hand (or a test fixture) can use the dotted `0.44.0`. The comma form is
+ * preferred because it is the one haxelib keeps. */
+String haxelib_version_path(const String &p_library_dir, const String &p_version) {
+	String comma = p_library_dir.path_join(haxelib_version_dir(p_version));
+	if (DirAccess::dir_exists_absolute(comma)) {
+		return comma;
+	}
+	String dotted = p_library_dir.path_join(p_version);
+	if (DirAccess::dir_exists_absolute(dotted)) {
+		return dotted;
+	}
+	return comma;
+}
+
 bool version_satisfies(const String &p_available, const String &p_requirement) {
 	if (p_requirement.is_empty()) {
 		return true;
@@ -142,6 +184,43 @@ Vector<String> read_directory(const String &p_path) {
 	}
 	dir->list_dir_end();
 	return entries;
+}
+
+/* Feature tags the current game build has to see as Haxe defines. The
+ * exporter sets them for the duration of an export build; a run started from
+ * the editor receives them through `GODOT_EDITOR_CUSTOM_FEATURES` instead. */
+Vector<String> runtime_features;
+
+/* Haxe defines for the feature tags that apply to a game build.
+ *
+ * Godot's feature tags are its compile time switches: a project declares custom
+ * ones in an export preset or the Run Instances dialog and GDScript reads them
+ * with `OS.has_feature`. A Haxe `#if` has to see the same names, so each tag
+ * becomes a plain `-D` define. Without this a tag such as `MOBILE_BUTTONS`
+ * worked in GDScript but was never defined for the Haxe compiler, so the
+ * guarded code was compiled out of the exported game. Editor builds are left
+ * out: the tags describe the exported game, not the editor. */
+Vector<String> feature_defines() {
+	Vector<String> defines;
+	for (const String &feature : runtime_features) {
+		String name = feature.strip_edges();
+		if (!name.is_empty() && !defines.has(name)) {
+			defines.push_back(name);
+		}
+	}
+	// A run started from the editor passes its Run Instances features to the
+	// game process through this variable. The exporter uses the setter above
+	// instead, because it builds the game library inside the editor process.
+	const String editor_features = OS::get_singleton()->get_environment("GODOT_EDITOR_CUSTOM_FEATURES").strip_edges();
+	if (!editor_features.is_empty()) {
+		for (const String &feature : editor_features.split(",")) {
+			String name = feature.strip_edges();
+			if (!name.is_empty() && !defines.has(name)) {
+				defines.push_back(name);
+			}
+		}
+	}
+	return defines;
 }
 
 bool write_if_changed(const String &p_path, const String &p_contents) {
@@ -555,6 +634,10 @@ void append_extra_argument(Vector<String> &r_arguments, const String &p_argument
 
 } // namespace
 
+void HaxeBuild::set_runtime_features(const Vector<String> &p_features) {
+	runtime_features = p_features;
+}
+
 /* ------------------------------------------------------------- processes -- */
 
 void HaxeProcess::_read_pipes() {
@@ -714,15 +797,19 @@ String HaxeBuild::get_last_build_log() {
 }
 
 String HaxeBuild::read_library_version(const String &p_library_dir, const String &p_requested) {
-	if (!p_requested.is_empty() && DirAccess::dir_exists_absolute(p_library_dir.path_join(p_requested))) {
+	// `p_requested` is a dotted version from the manifest; the directory that
+	// holds it is comma encoded by haxelib (but may be dotted by hand).
+	if (!p_requested.is_empty() && DirAccess::dir_exists_absolute(haxelib_version_path(p_library_dir, p_requested))) {
 		return p_requested;
 	}
 	String current_path = p_library_dir.path_join(".current");
 	if (FileAccess::exists(current_path)) {
 		Ref<FileAccess> file = FileAccess::open(current_path, FileAccess::READ);
 		if (file.is_valid()) {
+			// `.current` holds the dotted version even though the directory it
+			// points at is comma encoded.
 			String current = file->get_as_utf8_string().strip_edges();
-			if (!current.is_empty() && DirAccess::dir_exists_absolute(p_library_dir.path_join(current))) {
+			if (!current.is_empty() && DirAccess::dir_exists_absolute(haxelib_version_path(p_library_dir, current))) {
 				if (p_requested.is_empty() || version_satisfies(current, p_requested)) {
 					return current;
 				}
@@ -739,7 +826,10 @@ String HaxeBuild::read_library_version(const String &p_library_dir, const String
 	if (FileAccess::exists(p_library_dir.path_join("haxelib.json"))) {
 		return String();
 	}
-	for (const String &version : read_directory(p_library_dir)) {
+	for (const String &version_dir : read_directory(p_library_dir)) {
+		// Directory names are comma encoded; compare and report the dotted
+		// version the manifest and the compiler define use.
+		String version = haxelib_display_version(version_dir);
 		if (p_requested.is_empty() || version_satisfies(version, p_requested)) {
 			if (best.is_empty() || is_version_greater(version, best)) {
 				best = version;
@@ -772,11 +862,14 @@ Error HaxeBuild::resolve_dependencies(Vector<Library> &r_libraries, String &r_er
 	// project can be set up by unpacking archives. hxcpp is the shared
 	// toolchain that provides the cpp generator, not a project library, so it
 	// is left to the build pipeline.
-	for (const String &name : read_directory(haxelib_root)) {
-		if (name == "hxcpp" || requested_versions.has(name)) {
+	for (const String &repo_name : read_directory(haxelib_root)) {
+		// Directory names are comma encoded, so `thx.core` is on disk as
+		// `thx,core`. Everything above this point speaks the dotted name.
+		String name = haxelib_display_name(repo_name);
+		if (repo_name == "hxcpp" || requested_versions.has(name)) {
 			continue;
 		}
-		String library_root = haxelib_root.path_join(name);
+		String library_root = haxelib_root.path_join(repo_name);
 		bool looks_like_library = FileAccess::exists(library_root.path_join("haxelib.json"));
 		if (!looks_like_library) {
 			for (const String &version_dir : read_directory(library_root)) {
@@ -805,7 +898,8 @@ Error HaxeBuild::resolve_dependencies(Vector<Library> &r_libraries, String &r_er
 		visiting[name] = true;
 
 		String requested = requested_versions.has(name) ? requested_versions[name] : String();
-		String library_root = haxelib_root.path_join(name);
+		// The name is dotted; the directory on disk is comma encoded.
+		String library_root = haxelib_root.path_join(haxelib_repo_name(name));
 		String version = read_library_version(library_root, requested);
 		// A library whose directory contains haxelib.json but has no version
 		// subdirectory was copied in as-is; treat the directory itself as the
@@ -859,7 +953,7 @@ Error HaxeBuild::resolve_dependencies(Vector<Library> &r_libraries, String &r_er
 		}
 
 		library.version = version;
-		library.path = unversioned ? library_root : library_root.path_join(version);
+		library.path = unversioned ? library_root : haxelib_version_path(library_root, version);
 		library.class_path = library.path;
 
 		String json_path = library.path.path_join("haxelib.json");
@@ -930,8 +1024,8 @@ void HaxeBuild::list_installed_libraries(Vector<Library> &r_libraries) {
 
 	Vector<String> names = read_directory(haxelib_root);
 	names.sort();
-	for (const String &name : names) {
-		const String library_root = haxelib_root.path_join(name);
+	for (const String &repo_name : names) {
+		const String library_root = haxelib_root.path_join(repo_name);
 		String version = read_library_version(library_root, String());
 		bool unversioned = false;
 		if (version.is_empty() && FileAccess::exists(library_root.path_join("haxelib.json"))) {
@@ -944,9 +1038,11 @@ void HaxeBuild::list_installed_libraries(Vector<Library> &r_libraries) {
 		}
 
 		Library library;
-		library.name = name;
+		// Report the dotted name (`thx.core`), the form the manifest, the
+		// compiler define and the editor use; the directory is comma encoded.
+		library.name = haxelib_display_name(repo_name);
 		library.version = version;
-		library.path = unversioned ? library_root : library_root.path_join(version);
+		library.path = unversioned ? library_root : haxelib_version_path(library_root, version);
 		library.class_path = library.path;
 		const String json_path = library.path.path_join("haxelib.json");
 		if (FileAccess::exists(json_path)) {
@@ -965,7 +1061,7 @@ void HaxeBuild::list_installed_libraries(Vector<Library> &r_libraries) {
 			}
 		}
 		for (const HaxeProject::Dependency &dependency : dependencies) {
-			if (dependency.name == name) {
+			if (dependency.name == library.name) {
 				library.declared = true;
 				break;
 			}
@@ -991,8 +1087,183 @@ String HaxeBuild::generate_boot_class(const Vector<HaxeClassInfo> &p_classes) {
 		}
 		source += "\t];\n";
 	}
-	source += "\n\tstatic function main():Void {}\n}\n";
+	source += "\n\tstatic function main():Void {\n";
+	// `trace()` writes to stdout through hxcpp's runtime. Rebinding it to the
+	// module's bridge makes every `trace()` call reach the editor's Output panel
+	// (and the running game's log) with the same `file:line:` prefix the Haxe
+	// compiler uses, instead of only the process stdout.
+	source += "\t\thaxe.Log.trace = function(value:Dynamic, ?infos:haxe.PosInfos):Void {\n";
+	source += "\t\t\thxgodot.Native.log(0, haxe.Log.formatOutput(value, infos));\n";
+	source += "\t\t};\n";
+	source += "\t}\n}\n";
 	return source;
+}
+
+/* The version string of a haxelib library directory, from its `haxelib.json`, or
+ * the link a `haxelib dev`/`haxelib install --local` leaves behind (`.dev` names
+ * a checkout, `.current` names the selected version directory). Empty when none
+ * is present, which is the case for a hand-unpacked tree. */
+static String haxelib_directory_identity(const String &p_directory) {
+	for (const char *const marker : { ".dev", ".current" }) {
+		const String path = p_directory.path_join(marker);
+		if (!FileAccess::exists(path)) {
+			continue;
+		}
+		Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+		if (file.is_valid()) {
+			return String(marker) + ":" + file->get_as_utf8_string().strip_edges();
+		}
+	}
+	const String manifest_path = p_directory.path_join("haxelib.json");
+	if (!FileAccess::exists(manifest_path)) {
+		return String();
+	}
+	Ref<FileAccess> manifest = FileAccess::open(manifest_path, FileAccess::READ);
+	if (manifest.is_null()) {
+		return String();
+	}
+	const Variant parsed = JSON::parse_string(manifest->get_as_utf8_string());
+	if (parsed.get_type() != Variant::DICTIONARY) {
+		return String();
+	}
+	return String(Dictionary(parsed).get("version", Variant()));
+}
+
+/* The hxcpp tree the build will use: a project-local copy when present (it
+ * always wins, so it is resolved without running haxelib), otherwise the
+ * directory the machine-wide haxelib resolves. Empty when hxcpp cannot be
+ * found. */
+static String resolve_hxcpp_directory() {
+	const String local = HaxeProject::get_haxelib_dir().path_join("hxcpp");
+	if (DirAccess::dir_exists_absolute(local)) {
+		return local;
+	}
+	List<String> arguments;
+	arguments.push_back("path");
+	arguments.push_back("hxcpp");
+	String output;
+	int exit_code = 0;
+	if (run_process(HaxeProject::get_haxelib_executable(), arguments, output, exit_code) != OK || exit_code != 0) {
+		return String();
+	}
+	// `haxelib path` prints the resolved library directory on the first line and
+	// then the compiler class path; only the first line identifies the toolchain.
+	return output.strip_edges().get_slice("\n", 0).strip_edges();
+}
+
+/* Identity of the hxcpp code generator this build will use.
+ *
+ * hxcpp generates the C++ for the `cpp` target, so the produced library depends
+ * on the installed version. 4.3.2, for example, calls `setlocale(LC_ALL, "")`
+ * where 4.3.0 only calls `setlocale(LC_NUMERIC, "C")`, which adds an import to
+ * the web side module. hxcpp's own incremental step compares generated sources
+ * and object files, not the toolchain that produced them, so the version has to
+ * be part of the build stamp; otherwise selecting another hxcpp would quietly
+ * reuse the library built by the previous one. */
+static String hxcpp_identity() {
+	const String directory = resolve_hxcpp_directory();
+	if (directory.is_empty()) {
+		return "missing";
+	}
+	return directory + ":" + haxelib_directory_identity(directory);
+}
+
+/* The Emscripten toolchain definition of the hxcpp the build will use, or an
+ * empty string when it cannot be located.
+ *
+ * hxcpp resolves through haxelib, so its tree can be a `haxelib dev` link
+ * (`.dev`), a haxelib repository that keeps each version in its own directory,
+ * or the tree itself, and the toolchain file is under a `toolchain/` directory
+ * of whichever it is. */
+static String hxcpp_emscripten_toolchain_path() {
+	String root = resolve_hxcpp_directory();
+	if (root.is_empty()) {
+		return String();
+	}
+	const String dev_path = root.path_join(".dev");
+	if (FileAccess::exists(dev_path)) {
+		Ref<FileAccess> dev = FileAccess::open(dev_path, FileAccess::READ);
+		if (dev.is_valid()) {
+			root = dev->get_as_utf8_string().strip_edges();
+		}
+	}
+	Vector<String> candidates;
+	candidates.push_back(root);
+	for (const String &sub : DirAccess::get_directories_at(root)) {
+		candidates.push_back(root.path_join(sub));
+	}
+	for (const String &candidate : candidates) {
+		const String path = candidate.path_join("toolchain").path_join("emscripten-toolchain.xml");
+		if (FileAccess::exists(path)) {
+			return path;
+		}
+	}
+	return String();
+}
+
+/* Whether the hxcpp in use can build a web library for this engine's runtime.
+ *
+ * The engine's runtime module is built with WebAssembly exceptions (the module
+ * adds `-fwasm-exceptions` to a `dlink_enabled=yes` template, `HAXE_WEB.md` §3),
+ * and a side module that uses Emscripten's JavaScript exception scheme instead
+ * cannot throw into it: the engine prints `Exception` and the page stops. hxcpp
+ * decides the scheme in its Emscripten toolchain, and the flag changed between
+ * releases (4.3.2 selects `DISABLE_EXCEPTION_CATCHING=0`; the `git` version
+ * enables `-fwasm-exceptions`), so the file's content is checked rather than its
+ * version number. An hxcpp that cannot be inspected is accepted. */
+static String check_web_hxcpp_exceptions() {
+	const String path = hxcpp_emscripten_toolchain_path();
+	if (path.is_empty()) {
+		return String();
+	}
+	Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+	if (file.is_null()) {
+		return String();
+	}
+	const String text = file->get_as_utf8_string();
+	if (text.contains("-fwasm-exceptions") || !text.contains("DISABLE_EXCEPTION_CATCHING")) {
+		return String();
+	}
+	return vformat("The hxcpp in use (%s) selects Emscripten's JavaScript exception scheme instead of WebAssembly exceptions, but the engine's web runtime is built for WebAssembly exceptions, so a Haxe `throw` in the exported game would abort the page. "
+				   "Use an hxcpp whose Emscripten toolchain enables `-fwasm-exceptions` (the `git` version does; the 4.3.2 release does not) and point the project's haxelib directory at it, for example 'HAXELIB_PATH=<project>/haxelib haxelib dev hxcpp <hxcpp checkout>'.",
+			path);
+}
+
+String HaxeBuild::library_edit_signature(const String &p_class_path) {
+	uint64_t newest = 0;
+	int64_t files = 0;
+	int64_t bytes = 0;
+	Vector<String> pending;
+	pending.push_back(p_class_path);
+	while (!pending.is_empty()) {
+		const String current = pending[pending.size() - 1];
+		pending.remove_at(pending.size() - 1);
+		Ref<DirAccess> dir = DirAccess::open(current);
+		if (dir.is_null()) {
+			continue;
+		}
+		dir->list_dir_begin();
+		for (String name = dir->get_next(); !name.is_empty(); name = dir->get_next()) {
+			// Hidden entries (editors' swap files, version control data) are not
+			// part of what the compiler reads.
+			if (name.begins_with(".")) {
+				continue;
+			}
+			const String entry = current.path_join(name);
+			if (dir->current_is_dir()) {
+				pending.push_back(entry);
+			} else {
+				files++;
+				bytes += FileAccess::get_size(entry);
+				const uint64_t modified = FileAccess::get_modified_time(entry);
+				if (modified > newest) {
+					newest = modified;
+				}
+			}
+		}
+		dir->list_dir_end();
+	}
+	return vformat("%d:%d:%d", (int64_t)newest, files, bytes);
 }
 
 String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi) {
@@ -1006,7 +1277,7 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	lines.push_back(vformat("project=%s", HaxeProject::get_project_root()));
 	// Bumped whenever the module changes which classes or members a library
 	// contains, so that projects pick the change up without a manual Rebuild.
-	lines.push_back("module=3");
+	lines.push_back("module=5");
 
 	Vector<String> sources = HaxeProject::scan_sources();
 	for (const String &source : sources) {
@@ -1017,14 +1288,31 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	String dependency_error;
 	if (resolve_dependencies(libraries, dependency_error) == OK) {
 		for (const Library &library : libraries) {
-			lines.push_back(vformat("lib=%s:%s:%s", library.name, library.version, library.path));
+			String line = vformat("lib=%s:%s:%s", library.name, library.version, library.path);
+			// A `git`/`dev` install is a working tree the user can edit, so its
+			// contents are part of the build identity. A versioned release is
+			// immutable and its version already identifies it, so it is left
+			// out to avoid walking a possibly large tree on every stamp.
+			if (library.version == "git" || library.version == "dev") {
+				line += ":" + library_edit_signature(library.class_path);
+			}
+			lines.push_back(line);
 		}
 	} else {
 		lines.push_back("lib-error=" + dependency_error);
 	}
 
+	// The hxcpp code generator is the `cpp` target's compiler backend, so the
+	// library it produces depends on its version (see `hxcpp_identity`).
+	lines.push_back("hxcpp=" + hxcpp_identity());
+
 	for (const String &define : HaxeProject::get_defines()) {
 		lines.push_back("define=" + define);
+	}
+	if (!p_editor) {
+		for (const String &define : feature_defines()) {
+			lines.push_back("feature=" + define);
+		}
 	}
 	for (const String &argument : HaxeProject::get_extra_args()) {
 		lines.push_back("arg=" + argument);
@@ -1123,6 +1411,127 @@ Vector<String> HaxeBuild::android_compiler_defines(const String &p_abi, const St
 		arguments.push_back("ANDROID_NDK_ROOT=" + p_ndk_root);
 	}
 	return arguments;
+}
+
+/* An Android NDK install: every release since r19 ships `source.properties`
+ * and the LLVM toolchain the Haxe cross-build uses. A directory that only
+ * bears the name is not accepted, so a stale or half-removed folder cannot be
+ * chosen over a working install. */
+static bool has_android_ndk_layout(const String &p_path) {
+	return FileAccess::exists(p_path.path_join("source.properties")) &&
+			DirAccess::dir_exists_absolute(p_path.path_join("toolchains/llvm/prebuilt"));
+}
+
+/* The newest NDK directly inside `p_directory`, where each child is itself an
+ * install. This is the SDK's `ndk/<version>/` layout and also matches a
+ * directory that holds standalone release installs (`android-ndk-r29`). */
+static String find_versioned_ndk(const String &p_directory) {
+	Ref<DirAccess> dir = DirAccess::open(p_directory);
+	if (dir.is_null()) {
+		return String();
+	}
+	Vector<String> candidates;
+	dir->list_dir_begin();
+	for (String name = dir->get_next(); !name.is_empty(); name = dir->get_next()) {
+		if (!dir->current_is_dir() || name.begins_with(".")) {
+			continue;
+		}
+		String candidate = p_directory.path_join(name);
+		if (has_android_ndk_layout(candidate)) {
+			candidates.push_back(candidate);
+		}
+	}
+	dir->list_dir_end();
+	if (candidates.is_empty()) {
+		return String();
+	}
+	candidates.sort();
+	return candidates[candidates.size() - 1];
+}
+
+/* An NDK sitting next to `p_directory` under a name that mentions the NDK
+ * (`android-ndk`, `android-ndk-r29`, `ndk-r27c`). The name check keeps an
+ * unrelated sibling that happens to look like an NDK from being picked during
+ * the ancestor walk; the layout check is what actually accepts the folder, and
+ * `ndk/<version>/` is followed one level so an SDK found this way still
+ * resolves. The newest usable install wins. */
+static String find_sibling_ndk(const String &p_directory) {
+	Ref<DirAccess> dir = DirAccess::open(p_directory);
+	if (dir.is_null()) {
+		return String();
+	}
+	Vector<String> candidates;
+	dir->list_dir_begin();
+	for (String name = dir->get_next(); !name.is_empty(); name = dir->get_next()) {
+		if (!dir->current_is_dir() || name.begins_with(".")) {
+			continue;
+		}
+		if (!name.to_lower().contains("ndk")) {
+			continue;
+		}
+		String candidate = p_directory.path_join(name);
+		if (has_android_ndk_layout(candidate)) {
+			candidates.push_back(candidate);
+			continue;
+		}
+		String versioned = find_versioned_ndk(candidate);
+		if (!versioned.is_empty()) {
+			candidates.push_back(versioned);
+		}
+	}
+	dir->list_dir_end();
+	if (candidates.is_empty()) {
+		return String();
+	}
+	candidates.sort();
+	return candidates[candidates.size() - 1];
+}
+
+String HaxeBuild::find_android_ndk(const String &p_hint) {
+	const String hint = p_hint.strip_edges().simplify_path();
+	if (hint.is_empty()) {
+		return String();
+	}
+	// The hint is the NDK itself: `ANDROID_NDK_ROOT` may point straight at one.
+	if (has_android_ndk_layout(hint)) {
+		return hint;
+	}
+	// The hint is an SDK, whose NDK lives under `ndk/` (modern) or `ndk-bundle/`
+	// (legacy), or a directory of versioned installs.
+	String ndk = find_versioned_ndk(hint.path_join("ndk"));
+	if (!ndk.is_empty()) {
+		return ndk;
+	}
+	if (has_android_ndk_layout(hint.path_join("ndk-bundle"))) {
+		return hint.path_join("ndk-bundle");
+	}
+	ndk = find_versioned_ndk(hint);
+	if (!ndk.is_empty()) {
+		return ndk;
+	}
+	// The hint's directory or one of its ancestors holds the NDK next to it.
+	// The standalone download and the older releases install outside the SDK
+	// (`<parent>/android-ndk-r29` with the SDK in the same `<parent>`), and a
+	// configured SDK can be a sibling of such an install. Missing levels of a
+	// stale hint are skipped rather than ending the walk, so a path the SDK
+	// manager removed still recovers the install that replaced it. Only
+	// directories whose name mentions the NDK are considered, and the walk is
+	// bounded, so an unrelated directory is never searched.
+	String ancestor = hint.get_base_dir();
+	for (int i = 0; i < 6 && !ancestor.is_empty(); i++) {
+		if (DirAccess::dir_exists_absolute(ancestor)) {
+			ndk = find_sibling_ndk(ancestor);
+			if (!ndk.is_empty()) {
+				return ndk;
+			}
+		}
+		const String parent = ancestor.get_base_dir();
+		if (parent == ancestor) {
+			break;
+		}
+		ancestor = parent;
+	}
+	return String();
 }
 
 /* The hxcpp define that pins the architecture of a build for the machine the
@@ -1555,12 +1964,34 @@ Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const
 		arguments.push_back("--macro");
 		arguments.push_back(vformat("addGlobalMetadata('%s', '@:keep', true, true, true)", package));
 	}
+	// A class from an installed haxelib can be a script class too when it
+	// ultimately extends a Godot type (`hxvlc.godot.Video` is a `Sprite2D`). The
+	// engine reaches its members by name just like a project script's, so the
+	// fields of each such class are kept. Only the fields are marked, not the
+	// class: a library class that no project code uses is still dead code and
+	// is removed, while a used one keeps the `@:export` members the Inspector
+	// reads and the overrides (`_ready`, `_process`, ...) the engine calls.
+	// `recursive` is on because a field's dot-path is `<type>.<field>`; an exact
+	// match on the type name would match the type, not its fields.
+	for (const String &type_name : HaxeProject::get_library_script_classes()) {
+		arguments.push_back("--macro");
+		arguments.push_back(vformat("addGlobalMetadata('%s', '@:keep', true, false, true)", type_name));
+	}
 	arguments.push_back("-dce");
 	arguments.push_back("full");
 
 	for (const String &define : HaxeProject::get_defines()) {
 		arguments.push_back("-D");
 		arguments.push_back(define);
+	}
+	if (!p_editor) {
+		// Feature tags (an export preset's custom features, or the Run
+		// Instances list) become plain defines so `#if FEATURE` sees them in
+		// the exported game.
+		for (const String &define : feature_defines()) {
+			arguments.push_back("-D");
+			arguments.push_back(define);
+		}
 	}
 	for (const String &argument : HaxeBuild::normalize_extra_arguments(HaxeProject::get_extra_args())) {
 		arguments.push_back(argument);
@@ -1713,6 +2144,18 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 			finished = true;
 			return;
 		}
+		// The web side module has to use the same exception scheme as the
+		// engine's runtime (see `check_web_hxcpp_exceptions`); an hxcpp that
+		// still selects Emscripten's JS scheme would produce a page that aborts
+		// on the first Haxe `throw`, so it is refused here rather than at run
+		// time.
+		const String hxcpp_exception_error = check_web_hxcpp_exceptions();
+		if (!hxcpp_exception_error.is_empty()) {
+			result = HaxeBuild::Result::failed(hxcpp_exception_error);
+			last_build_log = hxcpp_exception_error;
+			finished = true;
+			return;
+		}
 		// Point hxcpp at the same `emcc` the check accepted: the editor's own
 		// PATH may not contain it (a desktop launch does not source
 		// emsdk_env.sh), and an inherited EMSDK may name another version.
@@ -1771,6 +2214,18 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 	DirAccess::make_dir_recursive_absolute(generated_dir);
 	if (!write_if_changed(generated_dir.path_join("__HaxeGodotBoot.hx"), boot_source)) {
 		result = HaxeBuild::Result::failed(vformat("Cannot write generated entry point into %s.", generated_dir));
+		finished = true;
+		return;
+	}
+
+	// Stubs for the project's GDScript global classes, so a Haxe script can call
+	// them (`MyClass.staticFunction()`, `get_node("x", MyClass)`). They live on
+	// the same generated class path as the boot class, and are rewritten from
+	// the current GDScript sources on every build.
+	String stub_error;
+	if (HaxeGDScriptLibrary::get_singleton()->generate_stubs(generated_dir, stub_error) != OK) {
+		result = HaxeBuild::Result::failed(stub_error);
+		last_build_log = stub_error;
 		finished = true;
 		return;
 	}
@@ -2008,6 +2463,34 @@ List<String> HaxeBuild::remove_arguments(const String &p_name) {
 	return arguments;
 }
 
+List<String> HaxeBuild::git_arguments(const String &p_name, const String &p_url, const String &p_branch) {
+	// `haxelib git <name> <url> [branch]` clones the repository into the
+	// project repository and makes the checkout the library's active version.
+	List<String> arguments;
+	arguments.push_back("git");
+	arguments.push_back(p_name);
+	arguments.push_back(p_url);
+	if (!p_branch.is_empty()) {
+		arguments.push_back(p_branch);
+	}
+	arguments.push_back("--quiet");
+	arguments.push_back("--always");
+	return arguments;
+}
+
+List<String> HaxeBuild::version_arguments(const String &p_name, const String &p_version) {
+	// `haxelib install <name> <version>` downloads the version when it is
+	// missing and selects it when it is already in the repository, which is
+	// exactly "change the version of this library".
+	List<String> arguments;
+	arguments.push_back("install");
+	arguments.push_back(p_name);
+	arguments.push_back(p_version);
+	arguments.push_back("--quiet");
+	arguments.push_back("--always");
+	return arguments;
+}
+
 /* Runs a haxelib command to completion. The library manager runs the same
  * argument lists through `HaxeProcess` instead, so it can show progress. */
 static Error run_haxelib_blocking(const List<String> &p_arguments, String &r_output, int &r_exit_code) {
@@ -2050,7 +2533,66 @@ int HaxeBuild::parse_progress(const String &p_output) {
 	return value;
 }
 
-Error HaxeBuild::record_installed_library(const String &p_name, const String &p_version, String &r_output) {
+void HaxeBuild::list_library_versions(const String &p_name, Vector<String> &r_versions) {
+	r_versions.clear();
+	const String library_root = HaxeProject::get_haxelib_dir().path_join(haxelib_repo_name(p_name));
+	if (FileAccess::exists(library_root.path_join("haxelib.json"))) {
+		// A hand-dropped library has no version directory; it is addressed as
+		// the `dev` version so the manifest can still pin it.
+		r_versions.push_back("dev");
+		return;
+	}
+	for (const String &version_dir : read_directory(library_root)) {
+		String version = haxelib_display_version(version_dir);
+		if (!r_versions.has(version)) {
+			r_versions.push_back(version);
+		}
+	}
+	// Newest first so the current or latest release is the natural default.
+	for (int i = 0; i < r_versions.size(); i++) {
+		for (int j = i + 1; j < r_versions.size(); j++) {
+			if (is_version_greater(r_versions[j], r_versions[i])) {
+				String swap = r_versions[i];
+				r_versions.write[i] = r_versions[j];
+				r_versions.write[j] = swap;
+			}
+		}
+	}
+}
+
+Vector<String> HaxeBuild::parse_available_versions(const String &p_output) {
+	Vector<String> versions;
+	bool in_releases = false;
+	for (const String &raw_line : p_output.split("\n")) {
+		const String line = raw_line.strip_edges();
+		if (line.begins_with("Releases:")) {
+			in_releases = true;
+			continue;
+		}
+		if (!in_releases || line.is_empty()) {
+			continue;
+		}
+		// "2014-08-24 04:29:15 0.5.0 : first formal release" -> version is the
+		// third whitespace separated token. Only lines whose first token is the
+		// release date are accepted, so the free-form text of the following
+		// sections is not mistaken for a release.
+		PackedStringArray tokens = line.split(" ", false);
+		if (tokens.size() < 3) {
+			continue;
+		}
+		const String &date = tokens[0];
+		if (date.length() != 10 || date[4] != '-' || date[7] != '-') {
+			continue;
+		}
+		const String version = tokens[2];
+		if (!version.is_empty() && !versions.has(version)) {
+			versions.push_back(version);
+		}
+	}
+	return versions;
+}
+
+Error HaxeBuild::record_installed_library(const String &p_name, const String &p_version, String &r_output, bool p_replace_version) {
 	// The build resolves libraries from haxe.json, so a successful install
 	// must also become a recorded dependency; otherwise the library would sit
 	// in the repository unused.
@@ -2060,22 +2602,33 @@ Error HaxeBuild::record_installed_library(const String &p_name, const String &p_
 		r_output += "\n" + manifest_error;
 		return FAILED;
 	}
+	bool changed = false;
 	bool present = false;
-	for (const HaxeProject::Dependency &dependency : dependencies) {
-		if (dependency.name == p_name) {
-			present = true;
-			break;
+	for (HaxeProject::Dependency &dependency : dependencies) {
+		if (dependency.name != p_name) {
+			continue;
 		}
+		present = true;
+		// A version change (installing or selecting a specific version) has to
+		// be written back, otherwise the build keeps resolving the previous
+		// version. A Git install forces an empty version so the checkout is
+		// what the build resolves.
+		if ((p_replace_version || !p_version.is_empty()) && dependency.version != p_version) {
+			dependency.version = p_version;
+			changed = true;
+		}
+		break;
 	}
 	if (!present) {
 		HaxeProject::Dependency dependency;
 		dependency.name = p_name;
 		dependency.version = p_version;
 		dependencies.push_back(dependency);
-		if (HaxeProject::save_manifest(dependencies, manifest_error) != OK) {
-			r_output += "\n" + manifest_error;
-			return FAILED;
-		}
+		changed = true;
+	}
+	if (changed && HaxeProject::save_manifest(dependencies, manifest_error) != OK) {
+		r_output += "\n" + manifest_error;
+		return FAILED;
 	}
 	return OK;
 }

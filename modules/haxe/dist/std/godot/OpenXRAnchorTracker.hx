@@ -24,5 +24,11 @@ class OpenXRAnchorTracker extends godot.OpenXRSpatialEntityTracker {
 	public function has_uuid():Bool {
 		return cast Native.call(__hxgodotId, "has_uuid", []);
 	}
+
+	/** `uuid_changed` signal. */
+	public var uuid_changed(get, never):godot.Signal;
+	@:noCompletion function get_uuid_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "uuid_changed");
+	}
 	@:keep public static inline var SIGNAL_UUID_CHANGED:String = "uuid_changed";
 }

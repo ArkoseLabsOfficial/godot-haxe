@@ -636,10 +636,40 @@ class CodeEdit extends godot.TextEdit {
 	public function duplicate_lines():Void {
 		Native.call(__hxgodotId, "duplicate_lines", []);
 	}
+
+	/** `breakpoint_toggled` signal. */
+	public var breakpoint_toggled(get, never):godot.Signal;
+	@:noCompletion function get_breakpoint_toggled():godot.Signal {
+		return godot.Signal.fromObject(this, "breakpoint_toggled");
+	}
 	@:keep public static inline var SIGNAL_BREAKPOINT_TOGGLED:String = "breakpoint_toggled";
+
+	/** `code_completion_requested` signal. */
+	public var code_completion_requested(get, never):godot.Signal;
+	@:noCompletion function get_code_completion_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "code_completion_requested");
+	}
 	@:keep public static inline var SIGNAL_CODE_COMPLETION_REQUESTED:String = "code_completion_requested";
+
+	/** `symbol_lookup` signal. */
+	public var symbol_lookup(get, never):godot.Signal;
+	@:noCompletion function get_symbol_lookup():godot.Signal {
+		return godot.Signal.fromObject(this, "symbol_lookup");
+	}
 	@:keep public static inline var SIGNAL_SYMBOL_LOOKUP:String = "symbol_lookup";
+
+	/** `symbol_validate` signal. */
+	public var symbol_validate(get, never):godot.Signal;
+	@:noCompletion function get_symbol_validate():godot.Signal {
+		return godot.Signal.fromObject(this, "symbol_validate");
+	}
 	@:keep public static inline var SIGNAL_SYMBOL_VALIDATE:String = "symbol_validate";
+
+	/** `symbol_hovered` signal. */
+	public var symbol_hovered(get, never):godot.Signal;
+	@:noCompletion function get_symbol_hovered():godot.Signal {
+		return godot.Signal.fromObject(this, "symbol_hovered");
+	}
 	@:keep public static inline var SIGNAL_SYMBOL_HOVERED:String = "symbol_hovered";
 	@:keep public static var KIND_CLASS:Int = 0;
 	@:keep public static var KIND_FUNCTION:Int = 1;

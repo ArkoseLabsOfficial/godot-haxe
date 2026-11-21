@@ -253,6 +253,12 @@ class AudioStreamPlayer3D extends godot.Node3D {
 	public function get_stream_playback():godot.AudioStreamPlayback {
 		return cast Native.call(__hxgodotId, "get_stream_playback", []);
 	}
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 	@:keep public static var ATTENUATION_INVERSE_DISTANCE:Int = 0;
 	@:keep public static var ATTENUATION_INVERSE_SQUARE_DISTANCE:Int = 1;

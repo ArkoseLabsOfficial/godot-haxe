@@ -75,5 +75,11 @@ class AudioStream extends godot.Resource {
 	public function is_meta_stream():Bool {
 		return cast Native.call(__hxgodotId, "is_meta_stream", []);
 	}
+
+	/** `parameter_list_changed` signal. */
+	public var parameter_list_changed(get, never):godot.Signal;
+	@:noCompletion function get_parameter_list_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "parameter_list_changed");
+	}
 	@:keep public static inline var SIGNAL_PARAMETER_LIST_CHANGED:String = "parameter_list_changed";
 }

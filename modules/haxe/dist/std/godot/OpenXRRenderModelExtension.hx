@@ -63,7 +63,25 @@ class OpenXRRenderModelExtension extends godot.OpenXRExtensionWrapper {
 	public function render_model_get_animatable_node_transform(render_model:godot.RID, index:Int):godot.Transform3D {
 		return cast Native.call(__hxgodotId, "render_model_get_animatable_node_transform", [render_model, index]);
 	}
+
+	/** `render_model_added` signal. */
+	public var render_model_added(get, never):godot.Signal;
+	@:noCompletion function get_render_model_added():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_added");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_ADDED:String = "render_model_added";
+
+	/** `render_model_removed` signal. */
+	public var render_model_removed(get, never):godot.Signal;
+	@:noCompletion function get_render_model_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_removed");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_REMOVED:String = "render_model_removed";
+
+	/** `render_model_top_level_path_changed` signal. */
+	public var render_model_top_level_path_changed(get, never):godot.Signal;
+	@:noCompletion function get_render_model_top_level_path_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "render_model_top_level_path_changed");
+	}
 	@:keep public static inline var SIGNAL_RENDER_MODEL_TOP_LEVEL_PATH_CHANGED:String = "render_model_top_level_path_changed";
 }

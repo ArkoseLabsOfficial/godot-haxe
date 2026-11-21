@@ -49,7 +49,7 @@
 extern "C" {
 #endif
 
-#define HXGODOT_ABI_VERSION 3
+#define HXGODOT_ABI_VERSION 4
 
 #if defined(_WIN32)
 #define HXGODOT_EXPORT __declspec(dllexport)
@@ -263,6 +263,22 @@ typedef struct HxHostApi {
 	 * fields back into the Haxe wrapper. Used by Dictionary and the packed
 	 * arrays for the operations that are not implemented in Haxe. */
 	int (*variant_call_mutating)(const HxValue *p_target, const char *p_method, const HxValue *p_args, int p_argc, HxValue *r_ret, HxValue *r_updated);
+
+	/* Uploads raw pixel data into an ImageTexture. The library passes a
+	 * pointer to its own buffer instead of a Haxe `PackedByteArray`, so a
+	 * multi megabyte frame does not have to be marshalled element by element
+	 * (plus a Haxe `Array<Dynamic>` allocation) before every display. The host
+	 * copies `p_size` bytes and validates them against the format. `p_format`
+	 * is a Godot Image::Format. Returns 0 on success, 1 when the object is not
+	 * an ImageTexture and 2 on a bad argument or size. */
+	int (*update_texture)(int64_t p_texture, const void *p_pixels, int64_t p_size, int p_width, int p_height, int p_format);
+
+	/* Pushes interleaved signed 16 bit PCM samples into an
+	 * AudioStreamGeneratorPlayback. The host converts them to the engine's
+	 * float frames, so a frame of audio does not allocate one `Vector2` plus
+	 * one boxed `Dynamic` per sample. Returns the number of frames pushed, or
+	 * a negative value on failure (-1 no playback, -2 no data). */
+	int (*push_audio_frames)(int64_t p_playback, const void *p_samples, int p_frames, int p_channels);
 
 } HxHostApi;
 

@@ -288,6 +288,12 @@ class TileMapLayer extends godot.Node2D {
 	public function get_navigation_map():godot.RID {
 		return cast Native.call(__hxgodotId, "get_navigation_map", []);
 	}
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
 	@:keep public static var DEBUG_VISIBILITY_MODE_DEFAULT:Int = 0;
 	@:keep public static var DEBUG_VISIBILITY_MODE_FORCE_HIDE:Int = 2;

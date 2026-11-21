@@ -40,6 +40,7 @@
 #include "core/os/os.h"
 #include "core/string/translation.h"
 #include "core/version.h"
+#include "editor/editor_node.h"
 #include "editor/export/export_template_manager.h"
 #include "editor/file_system/editor_paths.h"
 #include "editor/settings/editor_settings.h"
@@ -59,63 +60,50 @@ const char *const HAXE_TEMPLATE_MARKER = "HaxeScript";
  * them. The names are also the hxcpp target that produces each library. */
 const char *const ANDROID_ABIS[] = { "armeabi-v7a", "arm64-v8a", "x86", "x86_64" };
 
-bool has_android_ndk_layout(const String &p_path) {
-	return FileAccess::exists(p_path.path_join("source.properties")) &&
-			DirAccess::dir_exists_absolute(p_path.path_join("toolchains/llvm/prebuilt"));
-}
+/* Keeps an editor progress entry alive for as long as the Haxe library is
+ * compiled. The build shells out to `haxe`, hxcpp and the platform compilers
+ * with no progress reporting of its own, so without this the export looks
+ * frozen for however long the compile takes (the editor's progress dialog in
+ * the GUI, `[ 42% ] ...` lines on a `--headless --export-*` command line). */
+struct HaxeBuildProgress {
+	EditorProgress *progress = nullptr;
 
-/* `ANDROID_NDK_DIR` usually points at the directory that holds several
- * versioned NDKs; pick the newest one that has a usable toolchain. */
-String find_versioned_ndk(const String &p_directory) {
-	Ref<DirAccess> dir = DirAccess::open(p_directory);
-	if (dir.is_null()) {
-		return String();
+	HaxeBuildProgress(const String &p_label, int p_amount) {
+		progress = memnew(EditorProgress("haxe_export", p_label, p_amount));
 	}
-	Vector<String> candidates;
-	dir->list_dir_begin();
-	for (String name = dir->get_next(); !name.is_empty(); name = dir->get_next()) {
-		if (!dir->current_is_dir() || name.begins_with(".")) {
-			continue;
-		}
-		String candidate = p_directory.path_join(name);
-		if (has_android_ndk_layout(candidate)) {
-			candidates.push_back(candidate);
-		}
-	}
-	dir->list_dir_end();
-	if (candidates.is_empty()) {
-		return String();
-	}
-	candidates.sort();
-	return candidates[candidates.size() - 1];
-}
 
+	~HaxeBuildProgress() {
+		memdelete(progress);
+	}
+
+	void step(const String &p_state, int p_index) {
+		progress->step(p_state, p_index);
+	}
+};
+
+/* Resolves the Android NDK the Haxe cross-build uses. The hint each variable
+ * carries can be the NDK, a directory of versioned NDKs, or an SDK, and a
+ * working install is always preferred over a value that only shadows it:
+ * `HaxeBuild::find_android_ndk()` knows every layout, so this only decides
+ * which hints to try and in what order. `ANDROID_NDK_ROOT`/`ANDROID_NDK_DIR`
+ * name the NDK directly; `ANDROID_SDK` is not a variable the Android tools
+ * set, while `ANDROID_HOME` and `ANDROID_SDK_ROOT` are, and Godot's own
+ * Android exporter defaults `android_sdk_path` from `ANDROID_HOME`. The
+ * EditorSettings value is the last fallback. */
 String find_android_ndk_root() {
-	for (const char *variable : { "ANDROID_NDK_ROOT", "ANDROID_NDK_DIR" }) {
-		String value = OS::get_singleton()->get_environment(variable).strip_edges();
+	for (const char *variable : { "ANDROID_NDK_ROOT", "ANDROID_NDK_DIR", "ANDROID_HOME", "ANDROID_SDK_ROOT", "ANDROID_SDK" }) {
+		const String value = OS::get_singleton()->get_environment(variable).strip_edges();
 		if (value.is_empty()) {
 			continue;
 		}
-		if (has_android_ndk_layout(value)) {
-			return value;
-		}
-		String versioned = find_versioned_ndk(value);
-		if (!versioned.is_empty()) {
-			return versioned;
+		const String ndk = HaxeBuild::find_android_ndk(value);
+		if (!ndk.is_empty()) {
+			return ndk;
 		}
 	}
-	String sdk = OS::get_singleton()->get_environment("ANDROID_SDK").strip_edges();
-	if (sdk.is_empty()) {
-		sdk = String(EDITOR_GET("export/android/android_sdk_path")).strip_edges();
-	}
-	if (!sdk.is_empty()) {
-		String versioned = find_versioned_ndk(sdk.path_join("ndk"));
-		if (!versioned.is_empty()) {
-			return versioned;
-		}
-		if (has_android_ndk_layout(sdk.path_join("ndk-bundle"))) {
-			return sdk.path_join("ndk-bundle");
-		}
+	const String configured = String(EDITOR_GET("export/android/android_sdk_path")).strip_edges();
+	if (!configured.is_empty()) {
+		return HaxeBuild::find_android_ndk(configured);
 	}
 	return String();
 }
@@ -199,6 +187,118 @@ bool archive_contains_marker(const String &p_path, const char *p_needle) {
 /* Whether a zip archive has an entry with this exact name. A web template built
  * with `dlink_enabled=yes` carries the engine as a side module; without it the
  * page has no dynamic linker to load the Haxe module. */
+/* Reads one unsigned LEB128 integer, the encoding WebAssembly uses for counts,
+ * lengths and indexes. `r_offset` is advanced past it; false means the bytes
+ * ended early or the encoding is not a valid 64-bit integer. */
+bool wasm_read_uleb128(const Vector<uint8_t> &p_bytes, int &r_offset, int p_end, uint64_t &r_value) {
+	r_value = 0;
+	int shift = 0;
+	while (r_offset < p_end) {
+		const uint8_t byte = p_bytes[r_offset++];
+		r_value |= (uint64_t)(byte & 0x7f) << shift;
+		if ((byte & 0x80) == 0) {
+			return true;
+		}
+		shift += 7;
+		if (shift > 63) {
+			return false;
+		}
+	}
+	return false;
+}
+
+/* Whether a WebAssembly module's export section lists `p_symbol`.
+ *
+ * Export names are length-prefixed UTF-8, not null terminated, so the module is
+ * walked section by section and the export section (id 7) is read entry by
+ * entry. Reading the structure is precise, unlike searching the bytes, which
+ * would also match the optional debug `name` section. */
+bool wasm_exports_symbol(const Vector<uint8_t> &p_bytes, const String &p_symbol) {
+	if (p_bytes.size() < 8 || p_bytes[0] != 0x00 || p_bytes[1] != 0x61 || p_bytes[2] != 0x73 || p_bytes[3] != 0x6d) {
+		return false;
+	}
+	const CharString symbol = p_symbol.utf8();
+	const int size = p_bytes.size();
+	int offset = 8;
+	while (offset < size) {
+		uint64_t section_id = 0;
+		uint64_t section_size = 0;
+		if (!wasm_read_uleb128(p_bytes, offset, size, section_id) || !wasm_read_uleb128(p_bytes, offset, size, section_size)) {
+			return false;
+		}
+		const int section_end = (int)MIN((uint64_t)size, (uint64_t)offset + section_size);
+		if (section_id == 7) {
+			int cursor = offset;
+			uint64_t count = 0;
+			if (!wasm_read_uleb128(p_bytes, cursor, section_end, count)) {
+				return false;
+			}
+			for (uint64_t i = 0; i < count; i++) {
+				uint64_t name_length = 0;
+				if (!wasm_read_uleb128(p_bytes, cursor, section_end, name_length) || (int)name_length > section_end - cursor) {
+					return false;
+				}
+				if ((int)name_length == symbol.length() && memcmp(p_bytes.ptr() + cursor, symbol.get_data(), symbol.length()) == 0) {
+					return true;
+				}
+				cursor += (int)name_length;
+				// Export kind (byte) and index (uleb128), neither of which is
+				// needed past skipping them to reach the next name.
+				if (cursor >= section_end) {
+					return false;
+				}
+				cursor++;
+				uint64_t index = 0;
+				if (!wasm_read_uleb128(p_bytes, cursor, section_end, index)) {
+					return false;
+				}
+			}
+			return false;
+		}
+		offset = section_end;
+	}
+	return false;
+}
+
+/* Whether the main runtime module of a web template exports `p_symbol`.
+ *
+ * The engine module lives in `godot.side.wasm`; `godot.wasm` is the small
+ * runtime that exports the host's libc and C ABI to the side modules the page
+ * loads. A custom template that resolves here (rather than through the installed
+ * directory) is still a zip, and a template that cannot be read does not make
+ * the export fail: only a definite "not exported" does. */
+bool web_template_exports_symbol(const String &p_path, const String &p_symbol) {
+	Ref<FileAccess> io_fa;
+	zlib_filefunc_def io = zipio_create_io(&io_fa);
+	unzFile package = unzOpen2(p_path.utf8().get_data(), &io);
+	if (package == nullptr) {
+		return true;
+	}
+	bool found = false;
+	bool checked = false;
+	for (int ret = unzGoToFirstFile(package); ret == UNZ_OK; ret = unzGoToNextFile(package)) {
+		unz_file_info64 info;
+		String entry;
+		if (godot_unzip_get_current_file_info(package, info, entry) != UNZ_OK || entry != "godot.wasm") {
+			continue;
+		}
+		if (unzOpenCurrentFile(package) != UNZ_OK) {
+			break;
+		}
+		Vector<uint8_t> bytes;
+		bytes.resize((int)info.uncompressed_size);
+		const int read = bytes.is_empty() ? 0 : unzReadCurrentFile(package, bytes.ptrw(), bytes.size());
+		unzCloseCurrentFile(package);
+		checked = read == (int)bytes.size();
+		if (checked) {
+			found = wasm_exports_symbol(bytes, p_symbol);
+		}
+		break;
+	}
+	unzClose(package);
+	return !checked || found;
+}
+
 bool archive_has_entry(const String &p_path, const String &p_entry) {
 	Ref<FileAccess> io_fa;
 	zlib_filefunc_def io = zipio_create_io(&io_fa);
@@ -367,6 +467,22 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 
 	metadata_packaged = false;
 
+	// The export preset's custom features are Godot's compile time switches,
+	// and GDScript reads them with `OS.has_feature`. Hand them to the build as
+	// Haxe defines so a Haxe `#if MOBILE_BUTTONS` matches, and clear them again
+	// in `_export_end()` so an editor build is unaffected.
+	Ref<EditorExportPreset> feature_preset = get_export_preset();
+	if (feature_preset.is_valid()) {
+		Vector<String> features;
+		for (const String &feature : feature_preset->get_custom_features().split(",")) {
+			String name = feature.strip_edges();
+			if (!name.is_empty()) {
+				features.push_back(name);
+			}
+		}
+		HaxeBuild::set_runtime_features(features);
+	}
+
 	Ref<EditorExportPlatform> platform = get_export_platform();
 	if (platform.is_null()) {
 		return;
@@ -463,7 +579,7 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 		ndk_root = find_android_ndk_root();
 		if (ndk_root.is_empty()) {
 			platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_ERROR, TTR("Haxe"),
-					TTR("The Android NDK was not found, so the Haxe library cannot be cross-compiled. Set ANDROID_NDK_ROOT (or ANDROID_NDK_DIR), or configure 'export/android/android_sdk_path' in the Editor Settings."));
+					TTR("The Android NDK was not found, so the Haxe library cannot be cross-compiled. Set ANDROID_NDK_ROOT (or ANDROID_NDK_DIR) to the NDK folder, or point 'export/android/android_sdk_path' in the Editor Settings at the Android SDK that contains the NDK. Both the modern 'ndk/<version>/' and the legacy 'ndk-bundle/' layouts are accepted, as is a standalone 'android-ndk-rNN' install."));
 			return;
 		}
 	} else if (web) {
@@ -538,6 +654,20 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 							template_path));
 			return;
 		}
+		// hxcpp 4.3.2 added `setlocale(LC_ALL, "")` to its library bootstrap, so
+		// a Haxe library built by it imports `setlocale` from the host page where
+		// 4.3.0 only called `setlocale(LC_NUMERIC, "C")`. The runtime module
+		// exports the symbol on a template built from this engine, but a custom
+		// one might not, and Emscripten then fails the side module's first call
+		// with a bare `TypeError: resolved is not a function` from the dynamic
+		// linker instead of naming the missing import, so it is checked here.
+		if (!web_template_exports_symbol(template_path, "setlocale")) {
+			platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_ERROR, TTR("Haxe"),
+					vformat("The web export template '%s' does not export 'setlocale', which a Haxe library built by hxcpp 4.3.2 or newer imports; the page would fail at load time with an unresolved-import error. "
+							"Build the web template from this engine with dynamic linking ('scons platform=web dlink_enabled=yes target=%s'), or pin a project-local hxcpp 4.3.0 in the project's haxelib directory.",
+							template_path, p_debug ? "template_debug" : "template_release"));
+			return;
+		}
 	} else {
 		// The game has to be able to load `.hx` resources, which only a
 		// template built with this module can do.
@@ -570,8 +700,13 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 	// loads; debug exports carry the debug configuration, release exports the
 	// release one.
 	const bool release = !p_debug;
+	// Keep a progress entry alive across the compile so the export shows what
+	// it is doing instead of freezing. One step per library produced.
+	HaxeBuildProgress build_progress(TTR("Compiling Haxe library"), android ? MAX((int)abis.size(), 1) : 1);
+	int build_step = 0;
 	if (android) {
 		for (const String &abi : abis) {
+			build_progress.step(vformat(TTR("Compiling the Haxe library for Android %s..."), abi), build_step++);
 			HaxeBuild::Result result = HaxeBuild::build(release, false, false, abi, ndk_root);
 			if (!result.success) {
 				String message = vformat("The Haxe project could not be compiled for Android %s, so the exported game cannot run its scripts.\n%s", abi, result.message);
@@ -591,10 +726,32 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 			// name must keep the `lib` prefix so the dynamic linker can resolve
 			// the soname the game opens.
 			add_shared_object(result.library_path, Vector<String>{ abi });
+
+			// The library links the native shared objects the Haxe libraries it
+			// uses need. On Android those are not part of the system, so the
+			// ones bundled inside the project are shipped too, under the soname
+			// the dynamic linker looks up (a bundled `libvlc-64.so` declares the
+			// soname `libvlc.so`, which is how the library names it).
+			Vector<String> missing;
+			const Vector<HaxeProject::NativeLibrary> native_libraries = HaxeProject::resolve_native_libraries(result.library_path, abi, &missing);
+			for (const HaxeProject::NativeLibrary &native : native_libraries) {
+				add_shared_object(native.path, Vector<String>{ abi }, native.name);
+				platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_INFO, TTR("Haxe"),
+						vformat("Resolved the native dependency '%s' ('%s') for Android %s; it is packaged unless the export template already provides it.", native.name, native.path.get_file(), abi));
+			}
+			if (!missing.is_empty()) {
+				// Names that are not bundled are expected to come from the
+				// platform (`libc.so`, `liblog.so`, ...), so this is verbose
+				// only.
+				print_verbose(vformat("Haxe: Android %s dependencies not bundled with the project (assumed to be provided by the system): %s.",
+						abi, String(", ").join(missing)));
+			}
+
 			platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_INFO, TTR("Haxe"),
 					vformat("Packaged the compiled Haxe library for Android %s ('%s').", abi, result.library_path.get_file()));
 		}
 	} else if (web) {
+		build_progress.step(TTR("Compiling the Haxe library for the web..."), build_step++);
 		HaxeBuild::Result result = HaxeBuild::build(release, false, false, web_target);
 		if (!result.success) {
 			String message = vformat("The Haxe project could not be compiled for the web, so the exported game cannot run its scripts.\n%s", result.message);
@@ -617,6 +774,7 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 		platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_INFO, TTR("Haxe"),
 				vformat("Packaged the compiled Haxe library for the web ('%s').", result.library_path.get_file()));
 	} else {
+		build_progress.step(TTR("Compiling the Haxe library..."), build_step++);
 		HaxeBuild::Result result = HaxeBuild::build(release, false, false);
 		if (!result.success) {
 			String message = vformat("The Haxe project could not be compiled, so the exported game cannot run its scripts.\n%s", result.message);
@@ -673,4 +831,7 @@ void HaxeExportPlugin::_export_file(const String &p_path, const String &p_type, 
 
 void HaxeExportPlugin::_export_end() {
 	metadata_packaged = false;
+	// Drop the export preset's features again (see `_export_begin`), so a
+	// later editor build does not inherit defines that only apply to the game.
+	HaxeBuild::set_runtime_features(Vector<String>());
 }

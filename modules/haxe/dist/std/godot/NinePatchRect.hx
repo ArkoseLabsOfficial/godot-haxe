@@ -121,6 +121,12 @@ class NinePatchRect extends godot.Control {
 	public function get_v_axis_stretch_mode():Int {
 		return cast Native.call(__hxgodotId, "get_v_axis_stretch_mode", []);
 	}
+
+	/** `texture_changed` signal. */
+	public var texture_changed(get, never):godot.Signal;
+	@:noCompletion function get_texture_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "texture_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXTURE_CHANGED:String = "texture_changed";
 	@:keep public static var AXIS_STRETCH_MODE_STRETCH:Int = 0;
 	@:keep public static var AXIS_STRETCH_MODE_TILE:Int = 1;

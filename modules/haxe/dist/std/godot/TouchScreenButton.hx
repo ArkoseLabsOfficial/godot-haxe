@@ -108,7 +108,19 @@ class TouchScreenButton extends godot.Node2D {
 	public function is_pressed():Bool {
 		return cast Native.call(__hxgodotId, "is_pressed", []);
 	}
+
+	/** `pressed` signal. */
+	public var pressed(get, never):godot.Signal;
+	@:noCompletion function get_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pressed");
+	}
 	@:keep public static inline var SIGNAL_PRESSED:String = "pressed";
+
+	/** `released` signal. */
+	public var released(get, never):godot.Signal;
+	@:noCompletion function get_released():godot.Signal {
+		return godot.Signal.fromObject(this, "released");
+	}
 	@:keep public static inline var SIGNAL_RELEASED:String = "released";
 	@:keep public static var VISIBILITY_ALWAYS:Int = 0;
 	@:keep public static var VISIBILITY_TOUCHSCREEN_ONLY:Int = 1;

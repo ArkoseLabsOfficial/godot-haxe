@@ -104,6 +104,12 @@ class UndoRedo extends godot.Object {
 	public function undo():Bool {
 		return cast Native.call(__hxgodotId, "undo", []);
 	}
+
+	/** `version_changed` signal. */
+	public var version_changed(get, never):godot.Signal;
+	@:noCompletion function get_version_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "version_changed");
+	}
 	@:keep public static inline var SIGNAL_VERSION_CHANGED:String = "version_changed";
 	@:keep public static var MERGE_DISABLE:Int = 0;
 	@:keep public static var MERGE_ENDS:Int = 1;

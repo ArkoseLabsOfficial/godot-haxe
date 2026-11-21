@@ -123,5 +123,11 @@ class CanvasLayer extends godot.Node {
 	public function get_canvas():godot.RID {
 		return cast Native.call(__hxgodotId, "get_canvas", []);
 	}
+
+	/** `visibility_changed` signal. */
+	public var visibility_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_CHANGED:String = "visibility_changed";
 }

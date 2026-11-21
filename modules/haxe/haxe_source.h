@@ -37,6 +37,11 @@
 struct HaxeArgumentInfo {
 	String name;
 	String type;
+	/* True when the argument may be omitted at the call site. Haxe source has
+	 * no default arguments (a caller passes every one), but a GDScript
+	 * function does (`b: float = 1.0`), and the stub generated for it has to
+	 * make the argument optional so the same calls compile. */
+	bool optional = false;
 };
 
 struct HaxeFunctionInfo {
@@ -62,6 +67,8 @@ struct HaxeMemberInfo {
 	int line = 0;
 	bool exported = false;
 	bool is_static = false;
+	/* A `const` declaration: readable but not writable. */
+	bool constant = false;
 	String group;
 	String subgroup;
 	String hint_string;
@@ -136,6 +143,13 @@ struct HaxeClassInfo {
  * Parsing never executes project code.
  */
 Error parse_haxe_source(const String &p_source, const String &p_path, HaxeClassInfo &r_info);
+
+/* Extracts the type named `p_fq_name` from an already parsed module. A type is
+ * either the file's primary type (named after the file) or one of its
+ * secondary types, which Haxe imports as `<package>.<FileName>.<Type>`. The
+ * returned info has `fq_name` set to `p_fq_name`, so both the standard library
+ * index and the project library index can share the same extraction. */
+bool haxe_module_find_type(const HaxeClassInfo &p_file_info, const String &p_fq_name, HaxeClassInfo &r_info);
 
 /* Maps a Haxe type to the engine Variant type used for property metadata. */
 Variant::Type haxe_type_to_variant(const String &p_type, String &r_class_name);

@@ -17,6 +17,12 @@ class ResourceLoader extends godot.Object {
 		return cast Native.singleton("ResourceLoader");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ResourceLoader;
+	@:noCompletion static function get_singleton():godot.ResourceLoader {
+		return cast Native.singleton("ResourceLoader");
+	}
+
 	public function load_threaded_request(path:String, type_hint:String = "", use_sub_threads:Bool = false, cache_mode:Int = 1):godot.GD.Error {
 		return cast Native.call(__hxgodotId, "load_threaded_request", [path, type_hint, use_sub_threads, cache_mode]);
 	}

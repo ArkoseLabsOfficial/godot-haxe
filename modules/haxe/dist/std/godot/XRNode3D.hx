@@ -58,5 +58,11 @@ class XRNode3D extends godot.Node3D {
 	public function trigger_haptic_pulse(action_name:String, frequency:Float, amplitude:Float, duration_sec:Float, delay_sec:Float):Void {
 		Native.call(__hxgodotId, "trigger_haptic_pulse", [action_name, frequency, amplitude, duration_sec, delay_sec]);
 	}
+
+	/** `tracking_changed` signal. */
+	public var tracking_changed(get, never):godot.Signal;
+	@:noCompletion function get_tracking_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tracking_changed");
+	}
 	@:keep public static inline var SIGNAL_TRACKING_CHANGED:String = "tracking_changed";
 }

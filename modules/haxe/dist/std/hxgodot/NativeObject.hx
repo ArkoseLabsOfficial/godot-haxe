@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  NativeObject.hx                                                       */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 package hxgodot;
 
 import hxgodot.Native;
@@ -8,8 +38,10 @@ import hxgodot.Native;
  * An instance wraps a live engine object by its instance id. Created objects
  * are registered with the engine through `Native.newObject`, which returns the
  * id of the freshly instantiated object. Script instances are created by the
- * engine instead: there the id is empty while the constructor runs and the
- * engine assigns it afterwards.
+ * engine instead: the node already exists, so the generated `super()` chain
+ * binds it through `Native.scriptSelfId` before the constructor body runs.
+ * This keeps engine calls made from a constructor (`centered = false`, ...)
+ * working for nodes placed in the editor, not only for `new` from script.
  */
 @:keep
 class NativeObject {
@@ -18,6 +50,14 @@ class NativeObject {
 
 	public function new(?__engineClass:String) {
 		if (__engineClass == null) {
+			return;
+		}
+		// The engine owns the object of a script instance. Bind it here, not
+		// after construction, so the rest of the constructor can use it. It is
+		// not pinned: the engine keeps the node alive for the script.
+		var selfId = Native.scriptSelfId(this);
+		if (selfId.length > 0) {
+			__hxgodotId = selfId;
 			return;
 		}
 		var id = Native.newObject(__engineClass);

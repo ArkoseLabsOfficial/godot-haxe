@@ -145,7 +145,19 @@ class Curve extends godot.Resource {
 	public function bake():Void {
 		Native.call(__hxgodotId, "bake", []);
 	}
+
+	/** `range_changed` signal. */
+	public var range_changed(get, never):godot.Signal;
+	@:noCompletion function get_range_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "range_changed");
+	}
 	@:keep public static inline var SIGNAL_RANGE_CHANGED:String = "range_changed";
+
+	/** `domain_changed` signal. */
+	public var domain_changed(get, never):godot.Signal;
+	@:noCompletion function get_domain_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "domain_changed");
+	}
 	@:keep public static inline var SIGNAL_DOMAIN_CHANGED:String = "domain_changed";
 	@:keep public static var TANGENT_FREE:Int = 0;
 	@:keep public static var TANGENT_LINEAR:Int = 1;

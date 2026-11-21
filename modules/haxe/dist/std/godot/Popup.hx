@@ -11,5 +11,11 @@ class Popup extends godot.Window {
 	public function new(?__engineClass:String) {
 		super(__engineClass == null ? "Popup" : __engineClass);
 	}
+
+	/** `popup_hide` signal. */
+	public var popup_hide(get, never):godot.Signal;
+	@:noCompletion function get_popup_hide():godot.Signal {
+		return godot.Signal.fromObject(this, "popup_hide");
+	}
 	@:keep public static inline var SIGNAL_POPUP_HIDE:String = "popup_hide";
 }

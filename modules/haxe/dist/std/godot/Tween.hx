@@ -123,8 +123,26 @@ class Tween extends godot.RefCounted {
 	public static function interpolate_value(initial_value:Dynamic, delta_value:Dynamic, elapsed_time:Float, duration:Float, trans_type:Int, ease_type:Int):Dynamic {
 		return cast Native.callStatic("Tween", "interpolate_value", [initial_value, delta_value, elapsed_time, duration, trans_type, ease_type]);
 	}
+
+	/** `step_finished` signal. */
+	public var step_finished(get, never):godot.Signal;
+	@:noCompletion function get_step_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "step_finished");
+	}
 	@:keep public static inline var SIGNAL_STEP_FINISHED:String = "step_finished";
+
+	/** `loop_finished` signal. */
+	public var loop_finished(get, never):godot.Signal;
+	@:noCompletion function get_loop_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "loop_finished");
+	}
 	@:keep public static inline var SIGNAL_LOOP_FINISHED:String = "loop_finished";
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 	@:keep public static var TWEEN_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var TWEEN_PROCESS_IDLE:Int = 1;

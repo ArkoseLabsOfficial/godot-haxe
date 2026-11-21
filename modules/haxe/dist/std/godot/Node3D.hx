@@ -344,6 +344,12 @@ class Node3D extends godot.Node {
 	public function to_global(local_point:godot.Vector3):godot.Vector3 {
 		return cast Native.call(__hxgodotId, "to_global", [local_point]);
 	}
+
+	/** `visibility_changed` signal. */
+	public var visibility_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_CHANGED:String = "visibility_changed";
 	@:keep public static var ROTATION_EDIT_MODE_EULER:Int = 0;
 	@:keep public static var ROTATION_EDIT_MODE_QUATERNION:Int = 1;

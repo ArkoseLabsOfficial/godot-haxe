@@ -287,7 +287,19 @@ class AnimationPlayer extends godot.AnimationMixer {
 	public function get_root():String {
 		return cast Native.call(__hxgodotId, "get_root", []);
 	}
+
+	/** `current_animation_changed` signal. */
+	public var current_animation_changed(get, never):godot.Signal;
+	@:noCompletion function get_current_animation_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "current_animation_changed");
+	}
 	@:keep public static inline var SIGNAL_CURRENT_ANIMATION_CHANGED:String = "current_animation_changed";
+
+	/** `animation_changed` signal. */
+	public var animation_changed(get, never):godot.Signal;
+	@:noCompletion function get_animation_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_changed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_CHANGED:String = "animation_changed";
 	@:keep public static var ANIMATION_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var ANIMATION_PROCESS_IDLE:Int = 1;

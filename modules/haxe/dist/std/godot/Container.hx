@@ -43,6 +43,18 @@ class Container extends godot.Control {
 	public function is_accessibility_region():Bool {
 		return cast Native.call(__hxgodotId, "is_accessibility_region", []);
 	}
+
+	/** `pre_sort_children` signal. */
+	public var pre_sort_children(get, never):godot.Signal;
+	@:noCompletion function get_pre_sort_children():godot.Signal {
+		return godot.Signal.fromObject(this, "pre_sort_children");
+	}
 	@:keep public static inline var SIGNAL_PRE_SORT_CHILDREN:String = "pre_sort_children";
+
+	/** `sort_children` signal. */
+	public var sort_children(get, never):godot.Signal;
+	@:noCompletion function get_sort_children():godot.Signal {
+		return godot.Signal.fromObject(this, "sort_children");
+	}
 	@:keep public static inline var SIGNAL_SORT_CHILDREN:String = "sort_children";
 }

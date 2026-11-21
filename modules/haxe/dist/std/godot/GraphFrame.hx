@@ -78,5 +78,11 @@ class GraphFrame extends godot.GraphElement {
 	public function is_tint_color_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_tint_color_enabled", []);
 	}
+
+	/** `autoshrink_changed` signal. */
+	public var autoshrink_changed(get, never):godot.Signal;
+	@:noCompletion function get_autoshrink_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "autoshrink_changed");
+	}
 	@:keep public static inline var SIGNAL_AUTOSHRINK_CHANGED:String = "autoshrink_changed";
 }

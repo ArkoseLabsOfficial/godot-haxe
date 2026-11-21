@@ -45,5 +45,11 @@ class MenuButton extends godot.Button {
 	public function set_disable_shortcuts(disabled:Bool):Void {
 		Native.call(__hxgodotId, "set_disable_shortcuts", [disabled]);
 	}
+
+	/** `about_to_popup` signal. */
+	public var about_to_popup(get, never):godot.Signal;
+	@:noCompletion function get_about_to_popup():godot.Signal {
+		return godot.Signal.fromObject(this, "about_to_popup");
+	}
 	@:keep public static inline var SIGNAL_ABOUT_TO_POPUP:String = "about_to_popup";
 }

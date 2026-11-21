@@ -31,6 +31,12 @@ class OpenXRFutureResult extends godot.RefCounted {
 	public function get_result_value():Dynamic {
 		return cast Native.call(__hxgodotId, "get_result_value", []);
 	}
+
+	/** `completed` signal. */
+	public var completed(get, never):godot.Signal;
+	@:noCompletion function get_completed():godot.Signal {
+		return godot.Signal.fromObject(this, "completed");
+	}
 	@:keep public static inline var SIGNAL_COMPLETED:String = "completed";
 	@:keep public static var RESULT_RUNNING:Int = 0;
 	@:keep public static var RESULT_FINISHED:Int = 1;

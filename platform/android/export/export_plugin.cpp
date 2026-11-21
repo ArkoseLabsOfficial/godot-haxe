@@ -778,6 +778,16 @@ Vector<PluginConfigAndroid> EditorExportPlatformAndroid::get_enabled_plugins(con
 #endif // DISABLE_DEPRECATED
 
 Error EditorExportPlatformAndroid::store_in_apk(APKExportData *ed, const String &p_path, const Vector<uint8_t> &p_data, int compression_method) {
+	// An APK entry name must be unique; writing a second file with the same
+	// name (a shared object an export plugin adds that the template already
+	// ships, typically the NDK's `libc++_shared.so`) produces an archive the
+	// signing tools reject. Keep the file already in the template.
+	if (ed->entries.has(p_path)) {
+		print_verbose("Ignoring APK entry '" + p_path + "' because the export template already provides it.");
+		return OK;
+	}
+	ed->entries.insert(p_path);
+
 	zip_fileinfo zipfi = get_zip_fileinfo();
 	zipOpenNewFileInZip(ed->apk,
 			p_path.utf8().get_data(),
@@ -797,8 +807,13 @@ Error EditorExportPlatformAndroid::store_in_apk(APKExportData *ed, const String 
 }
 
 Error EditorExportPlatformAndroid::save_apk_so(const Ref<EditorExportPreset> &p_preset, void *p_userdata, const SharedObject &p_so) {
-	if (!p_so.path.get_file().begins_with("lib")) {
-		String err = "Android .so file names must start with \"lib\", but got: " + p_so.path;
+	// A plugin can rename a shared object on its way into the APK (`target`),
+	// which is how a bundled file whose name does not match the soname the
+	// library links against (`libvlc-64.so` for `libvlc.so`) is packaged under
+	// the name the dynamic linker resolves.
+	const String file_name = p_so.target.is_empty() ? p_so.path.get_file() : p_so.target.get_file();
+	if (!file_name.begins_with("lib")) {
+		String err = "Android .so file names must start with \"lib\", but got: " + file_name;
 		ERR_PRINT(err);
 		return FAILED;
 	}
@@ -817,7 +832,7 @@ Error EditorExportPlatformAndroid::save_apk_so(const Ref<EditorExportPreset> &p_
 		if (abi_index != -1) {
 			exported = true;
 			String abi = abis[abi_index].abi;
-			String dst_path = String("lib").path_join(abi).path_join(p_so.path.get_file());
+			String dst_path = String("lib").path_join(abi).path_join(file_name);
 			Vector<uint8_t> array = FileAccess::get_file_as_bytes(p_so.path);
 			Error store_err = store_in_apk(ed, dst_path, array, Z_NO_COMPRESSION);
 			ERR_FAIL_COND_V_MSG(store_err, store_err, "Cannot store in apk file '" + dst_path + "'.");
@@ -861,8 +876,10 @@ Error EditorExportPlatformAndroid::ignore_apk_file(const Ref<EditorExportPreset>
 }
 
 Error EditorExportPlatformAndroid::copy_gradle_so(const Ref<EditorExportPreset> &p_preset, void *p_userdata, const SharedObject &p_so) {
-	ERR_FAIL_COND_V_MSG(!p_so.path.get_file().begins_with("lib"), FAILED,
-			"Android .so file names must start with \"lib\", but got: " + p_so.path);
+	// See `save_apk_so`: `target` renames the object on its way into the APK.
+	const String file_name = p_so.target.is_empty() ? p_so.path.get_file() : p_so.target.get_file();
+	ERR_FAIL_COND_V_MSG(!file_name.begins_with("lib"), FAILED,
+			"Android .so file names must start with \"lib\", but got: " + file_name);
 	Vector<ABI> abis = get_abis();
 	CustomExportData *export_data = static_cast<CustomExportData *>(p_userdata);
 	bool exported = false;
@@ -878,8 +895,15 @@ Error EditorExportPlatformAndroid::copy_gradle_so(const Ref<EditorExportPreset> 
 			exported = true;
 			String type = export_data->debug ? "debug" : "release";
 			String abi = abis[abi_index].abi;
-			String filename = p_so.path.get_file();
-			String dst_path = export_data->libs_directory.path_join(type).path_join(abi).path_join(filename);
+			String dst_path = export_data->libs_directory.path_join(type).path_join(abi).path_join(file_name);
+			// The gradle project already ships the template's native libraries
+			// (`libgodot_android.so`, the NDK's `libc++_shared.so`), so a shared
+			// object a plugin adds under the same name must not overwrite (or
+			// duplicate) it.
+			if (export_data->libs.has(dst_path) || FileAccess::exists(dst_path)) {
+				print_verbose("Ignoring native library '" + dst_path + "' because the gradle project already provides it.");
+				continue;
+			}
 			Vector<uint8_t> data = FileAccess::get_file_as_bytes(p_so.path);
 			print_verbose("Copying .so file from " + p_so.path + " to " + dst_path);
 			Error err = store_file_at_path(dst_path, data);
@@ -4151,6 +4175,13 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 	Vector<uint8_t> themed_icon_xml_data;
 	int icon_xml_compression_method = -1;
 
+	// Names already present in the unaligned APK, filled from the export
+	// template below. `store_in_apk` uses it to avoid adding a second entry
+	// with the same name (which would corrupt the archive): an export plugin
+	// can add a shared object whose name the template already provides, such
+	// as the NDK's `libc++_shared.so`.
+	HashSet<String> apk_entries;
+
 	while (ret == UNZ_OK) {
 		//get filename
 		unz_file_info info;
@@ -4285,6 +4316,8 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 
 			zipWriteInFileInZip(unaligned_apk, data.ptr(), data.size());
 			zipCloseFileInZip(unaligned_apk);
+
+			apk_entries.insert(file);
 		}
 
 		ret = unzGoToNextFile(pkg);
@@ -4310,6 +4343,8 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 
 		zipWriteInFileInZip(unaligned_apk, themed_icon_xml_data.ptr(), themed_icon_xml_data.size());
 		zipCloseFileInZip(unaligned_apk);
+
+		apk_entries.insert(ICON_XML_PATH);
 	}
 
 	if (!invalid_abis.is_empty()) {
@@ -4326,11 +4361,13 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 		APKExportData ed;
 		ed.ep = &ep;
 		ed.apk = unaligned_apk;
+		ed.entries = apk_entries;
 		err = export_project_files(p_preset, p_debug, ignore_apk_file, nullptr, &ed, save_apk_so);
 	} else {
 		APKExportData ed;
 		ed.ep = &ep;
 		ed.apk = unaligned_apk;
+		ed.entries = apk_entries;
 		ed.pd.path = "assets.sparsepck";
 		ed.pd.use_sparse_pck = true;
 		if (p_preset->get_enc_directory()) {

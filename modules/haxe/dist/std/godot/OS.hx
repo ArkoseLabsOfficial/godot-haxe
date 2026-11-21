@@ -17,6 +17,12 @@ class OS extends godot.Object {
 		return cast Native.singleton("OS");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.OS;
+	@:noCompletion static function get_singleton():godot.OS {
+		return cast Native.singleton("OS");
+	}
+
 	public var low_processor_usage_mode(get, set):Bool;
 	@:noCompletion function get_low_processor_usage_mode():Bool {
 		return cast Native.call(__hxgodotId, "is_in_low_processor_usage_mode", []);

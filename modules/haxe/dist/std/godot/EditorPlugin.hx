@@ -301,11 +301,47 @@ class EditorPlugin extends godot.Node {
 	public function get_plugin_version():String {
 		return cast Native.call(__hxgodotId, "get_plugin_version", []);
 	}
+
+	/** `scene_changed` signal. */
+	public var scene_changed(get, never):godot.Signal;
+	@:noCompletion function get_scene_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "scene_changed");
+	}
 	@:keep public static inline var SIGNAL_SCENE_CHANGED:String = "scene_changed";
+
+	/** `scene_closed` signal. */
+	public var scene_closed(get, never):godot.Signal;
+	@:noCompletion function get_scene_closed():godot.Signal {
+		return godot.Signal.fromObject(this, "scene_closed");
+	}
 	@:keep public static inline var SIGNAL_SCENE_CLOSED:String = "scene_closed";
+
+	/** `main_screen_changed` signal. */
+	public var main_screen_changed(get, never):godot.Signal;
+	@:noCompletion function get_main_screen_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "main_screen_changed");
+	}
 	@:keep public static inline var SIGNAL_MAIN_SCREEN_CHANGED:String = "main_screen_changed";
+
+	/** `resource_saved` signal. */
+	public var resource_saved(get, never):godot.Signal;
+	@:noCompletion function get_resource_saved():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_saved");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_SAVED:String = "resource_saved";
+
+	/** `scene_saved` signal. */
+	public var scene_saved(get, never):godot.Signal;
+	@:noCompletion function get_scene_saved():godot.Signal {
+		return godot.Signal.fromObject(this, "scene_saved");
+	}
 	@:keep public static inline var SIGNAL_SCENE_SAVED:String = "scene_saved";
+
+	/** `project_settings_changed` signal. */
+	public var project_settings_changed(get, never):godot.Signal;
+	@:noCompletion function get_project_settings_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "project_settings_changed");
+	}
 	@:keep public static inline var SIGNAL_PROJECT_SETTINGS_CHANGED:String = "project_settings_changed";
 	@:keep public static var CONTAINER_TOOLBAR:Int = 0;
 	@:keep public static var CONTAINER_SPATIAL_EDITOR_MENU:Int = 1;

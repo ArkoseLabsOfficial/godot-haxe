@@ -146,6 +146,16 @@ public:
 	 * without spawning a compiler. */
 	static Vector<String> android_compiler_defines(const String &p_abi, const String &p_ndk_root);
 
+	/* Resolves an Android NDK install from a single hint directory, or an empty
+	 * string when none can be found. The hint is interpreted the way the
+	 * Android tools can leave it configured: the NDK itself, a directory of
+	 * versioned NDKs, an SDK whose NDK lives under `ndk/` (or the legacy
+	 * `ndk-bundle/`), or any directory next to a standalone release install
+	 * (`android-ndk-r29`). The search is a function of the hint alone — it
+	 * reads no environment or editor state — so it can be tested without
+	 * touching the machine's Android installation. */
+	static String find_android_ndk(const String &p_hint);
+
 	/* Compiler arguments that pin the architecture of a desktop build to the
 	 * one the engine itself was compiled for, so a library built by `haxe` on
 	 * the machine running the editor always matches the process that loads it.
@@ -231,6 +241,19 @@ public:
 	 * process has already loaded. */
 	static String current_stamp(bool p_release, bool p_editor, const String &p_abi = String());
 
+	/* A content signature for a library install that can be edited in place.
+	 *
+	 * A versioned haxelib release is immutable, so its version already
+	 * identifies it. A `git` install (the library manager's git installs) or a
+	 * library dropped into the project is a working tree the user edits, and
+	 * the compiler reads those files on every build: without a content
+	 * signature in the build stamp, an edit to a library class would be
+	 * ignored and a stale library reused. The signature combines the newest
+	 * modification time, the number of files and their total size, so an edit
+	 * (which bumps a time, and often a size) or an added/removed file both
+	 * change it. Exposed for the engine tests. */
+	static String library_edit_signature(const String &p_class_path);
+
 	/* Installs a library into the project-local haxelib directory. Uses the
 	 * haxelib executable with HAXELIB_PATH pointing at the project, so it
 	 * never touches the machine wide repository. With
@@ -247,15 +270,42 @@ public:
 	static List<String> install_arguments(const String &p_name, const String &p_version, bool p_skip_dependencies);
 	static List<String> update_arguments(const String &p_name);
 	static List<String> remove_arguments(const String &p_name);
+	/* Installs a library from a Git repository (`haxelib git`). The branch is
+	 * optional; haxelib clones the repository and makes the checkout the
+	 * library's active version. */
+	static List<String> git_arguments(const String &p_name, const String &p_url, const String &p_branch);
+	/* Switches an installed library to `p_version` (`haxelib install` with an
+	 * explicit version installs it when it is missing and selects it when it
+	 * is already present). */
+	static List<String> version_arguments(const String &p_name, const String &p_version);
 	/* Records a finished `haxelib install` in haxe.json, so the build resolves
-	 * the library it just downloaded. */
-	static Error record_installed_library(const String &p_name, const String &p_version, String &r_output);
+	 * the library it just downloaded. `p_replace_version` forces the recorded
+	 * version to `p_version` (a Git checkout is recorded with an empty
+	 * version, so that the checkout stays the active one). */
+	static Error record_installed_library(const String &p_name, const String &p_version, String &r_output, bool p_replace_version = false);
 	/* Forgets a library that was removed from the repository. */
 	static Error forget_removed_library(const String &p_name, String &r_output);
 	/* Percentage ([0, 100]) of the download reported by the last progress
 	 * line of haxelib output, or -1 when the output holds none. haxelib
 	 * rewrites a single line (" 42%\r") instead of printing new lines. */
 	static int parse_progress(const String &p_output);
+
+	/* Every version that is currently unpacked in the project repository for
+	 * `p_name`, newest first. Version directories are comma encoded on disk
+	 * (`0,44,0`), so the dotted form is reported. A hand-dropped library with
+	 * no version directory reports the single `dev` entry. */
+	static void list_library_versions(const String &p_name, Vector<String> &r_versions);
+
+	/* The released versions in the output of `haxelib info <name>`, oldest
+	 * first. The "Releases:" section lists one "date time version : comment"
+	 * line per release. */
+	static Vector<String> parse_available_versions(const String &p_output);
+
+	/* Feature tags a game build has to see as Haxe defines (an export preset's
+	 * custom features). The exporter sets them for the duration of an export
+	 * and clears them afterwards; a run from the editor uses the
+	 * `GODOT_EDITOR_CUSTOM_FEATURES` variable instead. */
+	static void set_runtime_features(const Vector<String> &p_features);
 
 	/* Checks that the external tools are usable. The returned string is empty
 	 * when everything is available, otherwise it describes what is missing. */
@@ -285,11 +335,16 @@ public:
 
 	static String get_last_build_log();
 
+	/* The generated `__HaxeGodotBoot` module: it references every project
+	 * class so hxcpp keeps them, and rebinds `haxe.Log.trace` so `trace()`
+	 * reaches the engine log. Public so the tests can check the generated
+	 * source without running a compiler. */
+	static String generate_boot_class(const Vector<HaxeClassInfo> &p_classes);
+
 private:
 	friend class HaxeBuildSession;
 
 	static String build_stamp(bool p_release, bool p_editor, const String &p_abi);
-	static String generate_boot_class(const Vector<HaxeClassInfo> &p_classes);
 	static void parse_diagnostics(const String &p_output, const Vector<Pair<String, String>> &p_class_path_aliases, Result &r_result);
 	static String read_library_version(const String &p_library_dir, const String &p_requested);
 };

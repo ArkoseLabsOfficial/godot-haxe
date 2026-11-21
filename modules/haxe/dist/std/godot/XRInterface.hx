@@ -151,6 +151,12 @@ class XRInterface extends godot.RefCounted {
 	public function get_supported_environment_blend_modes():Array<Dynamic> {
 		return cast Native.call(__hxgodotId, "get_supported_environment_blend_modes", []);
 	}
+
+	/** `play_area_changed` signal. */
+	public var play_area_changed(get, never):godot.Signal;
+	@:noCompletion function get_play_area_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "play_area_changed");
+	}
 	@:keep public static inline var SIGNAL_PLAY_AREA_CHANGED:String = "play_area_changed";
 	@:keep public static var XR_NONE:Int = 0;
 	@:keep public static var XR_MONO:Int = 1;

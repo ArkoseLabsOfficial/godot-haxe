@@ -38,6 +38,7 @@
 
 #include "core/io/image.h"
 #include "core/io/zip_io.h"
+#include "core/templates/hash_set.h"
 #include "editor/export/editor_export_platform.h"
 
 class ImageTexture;
@@ -78,6 +79,7 @@ class EditorExportPlatformAndroid : public EditorExportPlatform {
 	struct APKExportData {
 		EditorExportPlatform::PackData pd;
 		zipFile apk;
+		HashSet<String> entries;
 		EditorProgress *ep = nullptr;
 	};
 

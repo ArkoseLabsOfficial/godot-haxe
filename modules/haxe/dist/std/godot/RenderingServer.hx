@@ -17,6 +17,12 @@ class RenderingServer extends godot.Object {
 		return cast Native.singleton("RenderingServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.RenderingServer;
+	@:noCompletion static function get_singleton():godot.RenderingServer {
+		return cast Native.singleton("RenderingServer");
+	}
+
 	@:keep public static var NO_INDEX_ARRAY:Int = -1;
 	@:keep public static var ARRAY_WEIGHTS_SIZE:Int = 4;
 	@:keep public static var CANVAS_ITEM_Z_MIN:Int = -4096;
@@ -2202,7 +2208,19 @@ class RenderingServer extends godot.Object {
 	public function has_feature(feature:Int):Bool {
 		return cast Native.call(__hxgodotId, "has_feature", [feature]);
 	}
+
+	/** `frame_pre_draw` signal. */
+	public var frame_pre_draw(get, never):godot.Signal;
+	@:noCompletion function get_frame_pre_draw():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_pre_draw");
+	}
 	@:keep public static inline var SIGNAL_FRAME_PRE_DRAW:String = "frame_pre_draw";
+
+	/** `frame_post_draw` signal. */
+	public var frame_post_draw(get, never):godot.Signal;
+	@:noCompletion function get_frame_post_draw():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_post_draw");
+	}
 	@:keep public static inline var SIGNAL_FRAME_POST_DRAW:String = "frame_post_draw";
 	@:keep public static var TEXTURE_TYPE_2D:Int = 0;
 	@:keep public static var TEXTURE_TYPE_LAYERED:Int = 1;

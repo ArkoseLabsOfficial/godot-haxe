@@ -30,6 +30,8 @@
 
 #include "haxe_project.h"
 
+#include "haxe_elf.h"
+#include "haxe_library_index.h"
 #include "haxe_runtime.h"
 
 #include "core/config/engine.h"
@@ -38,6 +40,7 @@
 #include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "core/object/class_db.h"
+#include "core/object/script_language.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
 #include "core/templates/hash_set.h"
@@ -213,6 +216,18 @@ void HaxeProject::register_project_settings() {
 	}
 	if (!settings->has_setting(SETTING_HAXELIB_EXECUTABLE)) {
 		settings->set(SETTING_HAXELIB_EXECUTABLE, "haxelib");
+	}
+	// The two executable settings resolve `haxe` / `haxelib` from PATH and are
+	// identical on every platform, so they get no per-project UI: a "Toolchain"
+	// section in Project Settings only invites changing a value that never
+	// needs changing. The settings stay readable (and overridable in
+	// `project.godot`) for the rare setup that needs an absolute path.
+	// `add_hidden_prefix` aborts on a repeated prefix and this function runs
+	// once per language registration, so it is applied once.
+	static bool toolchain_hidden = false;
+	if (!toolchain_hidden) {
+		settings->add_hidden_prefix("haxe/toolchain/");
+		toolchain_hidden = true;
 	}
 	if (!settings->has_setting(SETTING_DEFINES)) {
 		settings->set(SETTING_DEFINES, PackedStringArray());
@@ -753,7 +768,7 @@ bool HaxeProject::get_class_info(const String &p_path, HaxeClassInfo &r_info) {
 	if (!entry.info.fq_name.is_empty()) {
 		name_to_path[entry.info.fq_name] = p_path;
 	}
-	if (!name_to_path.has(entry.info.name)) {
+	if (!entry.info.name.is_empty() && !name_to_path.has(entry.info.name)) {
 		name_to_path[entry.info.name] = p_path;
 	}
 	index_secondary_types(entry.info);
@@ -859,6 +874,36 @@ bool HaxeProject::get_class_info_by_name(const String &p_name, HaxeClassInfo &r_
 	return false;
 }
 
+bool HaxeProject::resolve_class_info_by_name(const String &p_name, HaxeClassInfo &r_info, String *r_path, bool *r_from_library) {
+	if (get_class_info_by_name(p_name, r_info, r_path)) {
+		if (r_from_library) {
+			*r_from_library = false;
+		}
+		return true;
+	}
+	/* A project class may extend a class from an installed haxelib, and a
+	 * library class may in turn extend another library class or a Godot class.
+	 * Haxe libraries are ordinary class paths to the compiler, so the editor
+	 * has to follow the same chain: without this a project class extending a
+	 * library class could not resolve its native base and every `@:export`
+	 * member declared by the library would be missing from the Inspector.
+	 *
+	 * This is deliberately separate from `get_class_info_by_name`: that lookup
+	 * only answers for project types, so completion can keep trying the
+	 * engine, the standard library and the project before a library, and a
+	 * library type can never shadow one of those. */
+	if (HaxeLibraryIndex::get_singleton()->get_type_info(p_name, r_info)) {
+		if (r_path) {
+			*r_path = r_info.path;
+		}
+		if (r_from_library) {
+			*r_from_library = true;
+		}
+		return true;
+	}
+	return false;
+}
+
 Vector<HaxeClassInfo> HaxeProject::get_all_classes() {
 	ensure_index();
 	Vector<HaxeClassInfo> classes;
@@ -913,7 +958,7 @@ void HaxeProject::cache_class_info(const HaxeClassInfo &p_info) {
 	if (!p_info.fq_name.is_empty()) {
 		name_to_path[p_info.fq_name] = p_info.path;
 	}
-	if (!name_to_path.has(p_info.name)) {
+	if (!p_info.name.is_empty() && !name_to_path.has(p_info.name)) {
 		name_to_path[p_info.name] = p_info.path;
 	}
 	index_secondary_types(p_info);
@@ -1232,6 +1277,125 @@ bool HaxeProject::load_script_metadata(const String &p_path) {
 	return true;
 }
 
+Vector<String> HaxeProject::get_library_script_classes() {
+	Vector<String> names;
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	if (!libraries->ensure_indexed()) {
+		return names;
+	}
+	// A copy, because `get_type_info()` locks the index below.
+	const Vector<String> type_names = libraries->get_type_names();
+	for (const String &type_name : type_names) {
+		HaxeClassInfo info;
+		if (!libraries->get_type_info(type_name, info) || !info.valid || info.is_abstract) {
+			continue;
+		}
+		if (info.base.is_empty()) {
+			continue;
+		}
+		// Only a class that reaches an engine class is a script type; a plain
+		// Haxe class in a library is left to dead code elimination.
+		if (resolve_native_base(info).is_empty()) {
+			continue;
+		}
+		names.push_back(type_name);
+	}
+	names.sort();
+	return names;
+}
+
+/* True when `p_path` is `p_dir` itself or lies below it. A plain prefix test
+ * would also match a sibling directory whose name starts with `p_dir`. */
+static bool path_is_under_directory(const String &p_path, const String &p_dir) {
+	if (p_dir.is_empty()) {
+		return false;
+	}
+	return p_path == p_dir || p_path.begins_with(p_dir.path_join(""));
+}
+
+Vector<HaxeProject::LibraryGlobalClass> HaxeProject::get_library_global_classes() {
+	Vector<LibraryGlobalClass> classes;
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	if (!libraries->ensure_indexed()) {
+		return classes;
+	}
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	const String haxelib_dir = get_haxelib_dir();
+	// A copy, because `get_type_info()` locks the index below.
+	const Vector<String> type_names = libraries->get_type_names();
+	for (const String &type_name : type_names) {
+		HaxeClassInfo info;
+		if (!libraries->get_type_info(type_name, info) || !info.valid || info.is_abstract || !info.is_global_class) {
+			continue;
+		}
+		// Only a class that reaches an engine class can be a node/resource
+		// script; a plain Haxe class in a library stays out of the dialog.
+		const String native_base = resolve_native_base(info);
+		if (native_base.is_empty()) {
+			continue;
+		}
+		// A class from the machine wide repository is not part of the project:
+		// the editor could neither open it as a resource nor let a saved scene
+		// reference it. Only the project haxelib directory is eligible.
+		if (!path_is_under_directory(info.path, haxelib_dir)) {
+			continue;
+		}
+		LibraryGlobalClass entry;
+		entry.name = info.name.is_empty() ? type_name : info.name;
+		entry.path = settings != nullptr ? settings->localize_path(info.path) : info.path;
+		entry.native_base = native_base;
+		entry.is_tool = info.is_tool;
+		classes.push_back(entry);
+	}
+	return classes;
+}
+
+void HaxeProject::sync_library_global_classes() {
+	// Names this process registered, mapped to the path they were registered
+	// with. Only an entry that still matches is removed, so a project class
+	// that happens to share a name is never dropped.
+	static HashMap<String, String> registered;
+
+	const Vector<LibraryGlobalClass> classes = get_library_global_classes();
+	HashMap<String, String> current;
+	for (const LibraryGlobalClass &entry : classes) {
+		current[entry.name] = entry.path;
+		ScriptServer::add_global_class(entry.name, entry.native_base, "Haxe", entry.path, entry.is_abstract, entry.is_tool);
+	}
+
+	for (const KeyValue<String, String> &entry : registered) {
+		if (current.has(entry.key) || !ScriptServer::is_global_class(entry.key)) {
+			continue;
+		}
+		if (ScriptServer::get_global_class_language(entry.key) != "Haxe" || ScriptServer::get_global_class_path(entry.key) != entry.value) {
+			continue;
+		}
+		ScriptServer::remove_global_class(entry.key);
+	}
+
+	// The global class cache persists the list across editor sessions, so an
+	// entry for a library source that is no longer installed has to be dropped
+	// even though this process did not register it. Both the localized and the
+	// raw haxelib directory are checked, so the entry is found in the editor
+	// (`res://haxelib`) and in a test (an absolute path).
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	const String haxelib_dir = get_haxelib_dir();
+	const String localized = settings != nullptr ? settings->localize_path(haxelib_dir) : String();
+	LocalVector<StringName> globals;
+	ScriptServer::get_global_class_list(globals);
+	for (const StringName &global : globals) {
+		if (ScriptServer::get_global_class_language(global) != "Haxe" || current.has(String(global))) {
+			continue;
+		}
+		const String path = ScriptServer::get_global_class_path(global);
+		if (path_is_under_directory(path, haxelib_dir) || path_is_under_directory(path, localized)) {
+			ScriptServer::remove_global_class(global);
+		}
+	}
+
+	registered = current;
+}
+
 String HaxeProject::resolve_native_base(const HaxeClassInfo &p_info) {
 	String base = p_info.base;
 	HashSet<String> visited;
@@ -1248,7 +1412,7 @@ String HaxeProject::resolve_native_base(const HaxeClassInfo &p_info) {
 			return clean;
 		}
 		HaxeClassInfo parent;
-		if (!get_class_info_by_name(base, parent) && !get_class_info_by_name(clean, parent)) {
+		if (!resolve_class_info_by_name(base, parent) && !resolve_class_info_by_name(clean, parent)) {
 			return String();
 		}
 		base = parent.base;
@@ -1283,6 +1447,129 @@ String HaxeProject::get_global_class_name(const String &p_path, String *r_base_t
 		*r_icon_path = String();
 	}
 	return info.name;
+}
+
+Vector<HaxeProject::NativeLibrary> HaxeProject::resolve_native_libraries(const String &p_library_path, const String &p_abi, Vector<String> *r_missing) {
+	Vector<NativeLibrary> libraries;
+	if (r_missing != nullptr) {
+		r_missing->clear();
+	}
+	const uint16_t machine = HaxeElf::abi_to_machine(p_abi);
+	if (machine == HaxeElf::MACHINE_NONE || p_library_path.is_empty()) {
+		return libraries;
+	}
+	HaxeElf::Object root;
+	// The linked library names its runtime dependencies. When it has none, or
+	// is not an ELF file at all (the web build is a WebAssembly module), there
+	// is nothing to package.
+	if (HaxeElf::parse(p_library_path, root) != OK || root.needed.is_empty()) {
+		return libraries;
+	}
+
+	/* Every shared object bundled inside the project is indexed once, by the
+	 * soname a linker records for it. hxvlc ships its Android libraries as
+	 * `libvlc-64.so`, `libvlc-v7.so` and so on, but they all declare the soname
+	 * `libvlc.so`; indexing by soname (and requiring the file to be built for
+	 * the exported ABI) resolves the right one without naming any library
+	 * specifically. Outputs and hidden directories (`.godot`, holding the
+	 * build output) are skipped, because they are generated, not bundled. */
+	struct Candidate {
+		String name;
+		String path;
+	};
+	Vector<Candidate> candidates;
+	const String canonical_library = p_library_path.simplify_path();
+	HashSet<String> seen_paths;
+	HashSet<String> seen_dirs;
+	Vector<String> pending;
+	const String project_root = get_project_root();
+	const String haxelib_dir = get_haxelib_dir();
+	if (!project_root.is_empty()) {
+		pending.push_back(project_root);
+	}
+	// The project-local haxelib usually lives inside the project, so scanning
+	// the project root reaches it; only a haxelib outside the project (which
+	// `haxe/haxelib_directory` allows) has to be added explicitly. An empty
+	// `p_dir` makes the check false, so an unset project root still scans the
+	// haxelib itself.
+	if (!haxelib_dir.is_empty() && !path_is_under_directory(haxelib_dir, project_root)) {
+		pending.push_back(haxelib_dir);
+	}
+	while (!pending.is_empty()) {
+		const String directory = pending[pending.size() - 1];
+		pending.remove_at(pending.size() - 1);
+		if (seen_dirs.has(directory)) {
+			continue;
+		}
+		seen_dirs.insert(directory);
+		Ref<DirAccess> dir = DirAccess::open(directory);
+		if (dir.is_null()) {
+			continue;
+		}
+		dir->list_dir_begin();
+		String entry = dir->get_next();
+		while (!entry.is_empty()) {
+			const String path = directory.path_join(entry);
+			if (dir->current_is_dir()) {
+				if (!entry.begins_with(".") && entry != "bin") {
+					pending.push_back(path);
+				}
+			} else if (entry.get_extension().to_lower() == "so" && !seen_paths.has(path)) {
+				seen_paths.insert(path);
+				if (path.simplify_path() != canonical_library) {
+					HaxeElf::Object object;
+					if (HaxeElf::parse(path, object) == OK && !object.soname.is_empty() && object.machine == machine) {
+						candidates.push_back({ object.soname, path });
+					}
+				}
+			}
+			entry = dir->get_next();
+		}
+		dir->list_dir_end();
+	}
+
+	// Walk the dependency graph from the library's own `DT_NEEDED` entries.
+	// A name that resolves is packaged together with its own dependencies; one
+	// that does not is assumed to be provided by the platform.
+	HashSet<String> resolved;
+	HashSet<String> queued;
+	Vector<String> queue = root.needed;
+	for (const String &name : queue) {
+		queued.insert(name);
+	}
+	while (!queue.is_empty()) {
+		const String name = queue[queue.size() - 1];
+		queue.remove_at(queue.size() - 1);
+		if (resolved.has(name)) {
+			continue;
+		}
+		resolved.insert(name);
+		bool found = false;
+		for (const Candidate &candidate : candidates) {
+			if (candidate.name != name) {
+				continue;
+			}
+			found = true;
+			NativeLibrary library;
+			library.name = name;
+			library.path = candidate.path;
+			libraries.push_back(library);
+			HaxeElf::Object object;
+			if (HaxeElf::parse(candidate.path, object) == OK) {
+				for (const String &needed : object.needed) {
+					if (!resolved.has(needed) && !queued.has(needed)) {
+						queued.insert(needed);
+						queue.push_back(needed);
+					}
+				}
+			}
+			break;
+		}
+		if (!found && r_missing != nullptr) {
+			r_missing->push_back(name);
+		}
+	}
+	return libraries;
 }
 
 Vector<String> HaxeProject::scan_sources() {
@@ -1380,13 +1667,25 @@ String HaxeProject::serialize_manifest(const Vector<Dependency> &p_dependencies)
 }
 
 Error HaxeProject::save_manifest(const Vector<Dependency> &p_dependencies, String &r_error) {
-	String text = serialize_manifest(p_dependencies);
-	Ref<FileAccess> file = FileAccess::open(get_manifest_path(), FileAccess::WRITE);
+	String path = get_manifest_path();
+	String text = serialize_manifest(p_dependencies) + "\n";
+	// Rewriting an identical manifest would bump the file's modification time
+	// and make the editor believe `haxe.json` changed on disk (it is a JSON
+	// file, which the script editor opens as text). An install that adds no new
+	// dependency, a repeated refresh or a no-op version switch then showed a
+	// "modified outside Godot" prompt. Only a real change is written.
+	if (FileAccess::exists(path)) {
+		Ref<FileAccess> existing = FileAccess::open(path, FileAccess::READ);
+		if (existing.is_valid() && existing->get_as_utf8_string() == text) {
+			return OK;
+		}
+	}
+	Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
 	if (file.is_null()) {
-		r_error = vformat("Cannot write %s.", get_manifest_path());
+		r_error = vformat("Cannot write %s.", path);
 		return ERR_CANT_CREATE;
 	}
-	file->store_string(text + "\n");
+	file->store_string(text);
 	return OK;
 }
 

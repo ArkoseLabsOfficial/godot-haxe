@@ -90,18 +90,96 @@ class WebXRInterface extends godot.XRInterface {
 	public function get_available_display_refresh_rates():Array<Dynamic> {
 		return cast Native.call(__hxgodotId, "get_available_display_refresh_rates", []);
 	}
+
+	/** `session_supported` signal. */
+	public var session_supported(get, never):godot.Signal;
+	@:noCompletion function get_session_supported():godot.Signal {
+		return godot.Signal.fromObject(this, "session_supported");
+	}
 	@:keep public static inline var SIGNAL_SESSION_SUPPORTED:String = "session_supported";
+
+	/** `session_started` signal. */
+	public var session_started(get, never):godot.Signal;
+	@:noCompletion function get_session_started():godot.Signal {
+		return godot.Signal.fromObject(this, "session_started");
+	}
 	@:keep public static inline var SIGNAL_SESSION_STARTED:String = "session_started";
+
+	/** `session_ended` signal. */
+	public var session_ended(get, never):godot.Signal;
+	@:noCompletion function get_session_ended():godot.Signal {
+		return godot.Signal.fromObject(this, "session_ended");
+	}
 	@:keep public static inline var SIGNAL_SESSION_ENDED:String = "session_ended";
+
+	/** `session_failed` signal. */
+	public var session_failed(get, never):godot.Signal;
+	@:noCompletion function get_session_failed():godot.Signal {
+		return godot.Signal.fromObject(this, "session_failed");
+	}
 	@:keep public static inline var SIGNAL_SESSION_FAILED:String = "session_failed";
+
+	/** `selectstart` signal. */
+	public var selectstart(get, never):godot.Signal;
+	@:noCompletion function get_selectstart():godot.Signal {
+		return godot.Signal.fromObject(this, "selectstart");
+	}
 	@:keep public static inline var SIGNAL_SELECTSTART:String = "selectstart";
+
+	/** `select` signal. */
+	public var select(get, never):godot.Signal;
+	@:noCompletion function get_select():godot.Signal {
+		return godot.Signal.fromObject(this, "select");
+	}
 	@:keep public static inline var SIGNAL_SELECT:String = "select";
+
+	/** `selectend` signal. */
+	public var selectend(get, never):godot.Signal;
+	@:noCompletion function get_selectend():godot.Signal {
+		return godot.Signal.fromObject(this, "selectend");
+	}
 	@:keep public static inline var SIGNAL_SELECTEND:String = "selectend";
+
+	/** `squeezestart` signal. */
+	public var squeezestart(get, never):godot.Signal;
+	@:noCompletion function get_squeezestart():godot.Signal {
+		return godot.Signal.fromObject(this, "squeezestart");
+	}
 	@:keep public static inline var SIGNAL_SQUEEZESTART:String = "squeezestart";
+
+	/** `squeeze` signal. */
+	public var squeeze(get, never):godot.Signal;
+	@:noCompletion function get_squeeze():godot.Signal {
+		return godot.Signal.fromObject(this, "squeeze");
+	}
 	@:keep public static inline var SIGNAL_SQUEEZE:String = "squeeze";
+
+	/** `squeezeend` signal. */
+	public var squeezeend(get, never):godot.Signal;
+	@:noCompletion function get_squeezeend():godot.Signal {
+		return godot.Signal.fromObject(this, "squeezeend");
+	}
 	@:keep public static inline var SIGNAL_SQUEEZEEND:String = "squeezeend";
+
+	/** `visibility_state_changed` signal. */
+	public var visibility_state_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_state_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_state_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_STATE_CHANGED:String = "visibility_state_changed";
+
+	/** `reference_space_reset` signal. */
+	public var reference_space_reset(get, never):godot.Signal;
+	@:noCompletion function get_reference_space_reset():godot.Signal {
+		return godot.Signal.fromObject(this, "reference_space_reset");
+	}
 	@:keep public static inline var SIGNAL_REFERENCE_SPACE_RESET:String = "reference_space_reset";
+
+	/** `display_refresh_rate_changed` signal. */
+	public var display_refresh_rate_changed(get, never):godot.Signal;
+	@:noCompletion function get_display_refresh_rate_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "display_refresh_rate_changed");
+	}
 	@:keep public static inline var SIGNAL_DISPLAY_REFRESH_RATE_CHANGED:String = "display_refresh_rate_changed";
 	@:keep public static var TARGET_RAY_MODE_UNKNOWN:Int = 0;
 	@:keep public static var TARGET_RAY_MODE_GAZE:Int = 1;

@@ -20,5 +20,11 @@ class ScrollBar extends godot.Range {
 		Native.call(__hxgodotId, "set_custom_step", [value]);
 		return value;
 	}
+
+	/** `scrolling` signal. */
+	public var scrolling(get, never):godot.Signal;
+	@:noCompletion function get_scrolling():godot.Signal {
+		return godot.Signal.fromObject(this, "scrolling");
+	}
 	@:keep public static inline var SIGNAL_SCROLLING:String = "scrolling";
 }

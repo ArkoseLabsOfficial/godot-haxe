@@ -105,6 +105,18 @@ class NavigationRegion2D extends godot.Node2D {
 	public function get_bounds():godot.Rect2 {
 		return cast Native.call(__hxgodotId, "get_bounds", []);
 	}
+
+	/** `navigation_polygon_changed` signal. */
+	public var navigation_polygon_changed(get, never):godot.Signal;
+	@:noCompletion function get_navigation_polygon_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "navigation_polygon_changed");
+	}
 	@:keep public static inline var SIGNAL_NAVIGATION_POLYGON_CHANGED:String = "navigation_polygon_changed";
+
+	/** `bake_finished` signal. */
+	public var bake_finished(get, never):godot.Signal;
+	@:noCompletion function get_bake_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "bake_finished");
+	}
 	@:keep public static inline var SIGNAL_BAKE_FINISHED:String = "bake_finished";
 }

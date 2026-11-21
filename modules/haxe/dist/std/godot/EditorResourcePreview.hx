@@ -31,5 +31,11 @@ class EditorResourcePreview extends godot.Node {
 	public function check_for_invalidation(path:String):Void {
 		Native.call(__hxgodotId, "check_for_invalidation", [path]);
 	}
+
+	/** `preview_invalidated` signal. */
+	public var preview_invalidated(get, never):godot.Signal;
+	@:noCompletion function get_preview_invalidated():godot.Signal {
+		return godot.Signal.fromObject(this, "preview_invalidated");
+	}
 	@:keep public static inline var SIGNAL_PREVIEW_INVALIDATED:String = "preview_invalidated";
 }

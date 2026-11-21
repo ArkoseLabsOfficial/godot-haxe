@@ -17,6 +17,12 @@ class GDScriptLanguageProtocol extends godot.JSONRPC {
 		return cast Native.singleton("GDScriptLanguageProtocol");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.GDScriptLanguageProtocol;
+	@:noCompletion static function get_singleton():godot.GDScriptLanguageProtocol {
+		return cast Native.singleton("GDScriptLanguageProtocol");
+	}
+
 	public function get_text_document():godot.GDScriptTextDocument {
 		return cast Native.call(__hxgodotId, "get_text_document", []);
 	}

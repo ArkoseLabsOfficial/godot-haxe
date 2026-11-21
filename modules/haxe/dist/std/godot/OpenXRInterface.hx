@@ -162,17 +162,89 @@ class OpenXRInterface extends godot.XRInterface {
 	public function set_gpu_level(level:Int):Void {
 		Native.call(__hxgodotId, "set_gpu_level", [level]);
 	}
+
+	/** `session_begun` signal. */
+	public var session_begun(get, never):godot.Signal;
+	@:noCompletion function get_session_begun():godot.Signal {
+		return godot.Signal.fromObject(this, "session_begun");
+	}
 	@:keep public static inline var SIGNAL_SESSION_BEGUN:String = "session_begun";
+
+	/** `session_stopping` signal. */
+	public var session_stopping(get, never):godot.Signal;
+	@:noCompletion function get_session_stopping():godot.Signal {
+		return godot.Signal.fromObject(this, "session_stopping");
+	}
 	@:keep public static inline var SIGNAL_SESSION_STOPPING:String = "session_stopping";
+
+	/** `session_synchronized` signal. */
+	public var session_synchronized(get, never):godot.Signal;
+	@:noCompletion function get_session_synchronized():godot.Signal {
+		return godot.Signal.fromObject(this, "session_synchronized");
+	}
 	@:keep public static inline var SIGNAL_SESSION_SYNCHRONIZED:String = "session_synchronized";
+
+	/** `session_focussed` signal. */
+	public var session_focussed(get, never):godot.Signal;
+	@:noCompletion function get_session_focussed():godot.Signal {
+		return godot.Signal.fromObject(this, "session_focussed");
+	}
 	@:keep public static inline var SIGNAL_SESSION_FOCUSSED:String = "session_focussed";
+
+	/** `session_visible` signal. */
+	public var session_visible(get, never):godot.Signal;
+	@:noCompletion function get_session_visible():godot.Signal {
+		return godot.Signal.fromObject(this, "session_visible");
+	}
 	@:keep public static inline var SIGNAL_SESSION_VISIBLE:String = "session_visible";
+
+	/** `session_loss_pending` signal. */
+	public var session_loss_pending(get, never):godot.Signal;
+	@:noCompletion function get_session_loss_pending():godot.Signal {
+		return godot.Signal.fromObject(this, "session_loss_pending");
+	}
 	@:keep public static inline var SIGNAL_SESSION_LOSS_PENDING:String = "session_loss_pending";
+
+	/** `instance_exiting` signal. */
+	public var instance_exiting(get, never):godot.Signal;
+	@:noCompletion function get_instance_exiting():godot.Signal {
+		return godot.Signal.fromObject(this, "instance_exiting");
+	}
 	@:keep public static inline var SIGNAL_INSTANCE_EXITING:String = "instance_exiting";
+
+	/** `pose_recentered` signal. */
+	public var pose_recentered(get, never):godot.Signal;
+	@:noCompletion function get_pose_recentered():godot.Signal {
+		return godot.Signal.fromObject(this, "pose_recentered");
+	}
 	@:keep public static inline var SIGNAL_POSE_RECENTERED:String = "pose_recentered";
+
+	/** `refresh_rate_changed` signal. */
+	public var refresh_rate_changed(get, never):godot.Signal;
+	@:noCompletion function get_refresh_rate_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "refresh_rate_changed");
+	}
 	@:keep public static inline var SIGNAL_REFRESH_RATE_CHANGED:String = "refresh_rate_changed";
+
+	/** `cpu_level_changed` signal. */
+	public var cpu_level_changed(get, never):godot.Signal;
+	@:noCompletion function get_cpu_level_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "cpu_level_changed");
+	}
 	@:keep public static inline var SIGNAL_CPU_LEVEL_CHANGED:String = "cpu_level_changed";
+
+	/** `gpu_level_changed` signal. */
+	public var gpu_level_changed(get, never):godot.Signal;
+	@:noCompletion function get_gpu_level_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "gpu_level_changed");
+	}
 	@:keep public static inline var SIGNAL_GPU_LEVEL_CHANGED:String = "gpu_level_changed";
+
+	/** `user_presence_changed` signal. */
+	public var user_presence_changed(get, never):godot.Signal;
+	@:noCompletion function get_user_presence_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "user_presence_changed");
+	}
 	@:keep public static inline var SIGNAL_USER_PRESENCE_CHANGED:String = "user_presence_changed";
 	@:keep public static var SESSION_STATE_UNKNOWN:Int = 0;
 	@:keep public static var SESSION_STATE_IDLE:Int = 1;

@@ -123,7 +123,25 @@ class SceneMultiplayer extends godot.MultiplayerAPI {
 	public function send_bytes(bytes:godot.PackedByteArray, id:Int = 0, mode:Int = 2, channel:Int = 0):godot.GD.Error {
 		return cast Native.call(__hxgodotId, "send_bytes", [bytes, id, mode, channel]);
 	}
+
+	/** `peer_authenticating` signal. */
+	public var peer_authenticating(get, never):godot.Signal;
+	@:noCompletion function get_peer_authenticating():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_authenticating");
+	}
 	@:keep public static inline var SIGNAL_PEER_AUTHENTICATING:String = "peer_authenticating";
+
+	/** `peer_authentication_failed` signal. */
+	public var peer_authentication_failed(get, never):godot.Signal;
+	@:noCompletion function get_peer_authentication_failed():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_authentication_failed");
+	}
 	@:keep public static inline var SIGNAL_PEER_AUTHENTICATION_FAILED:String = "peer_authentication_failed";
+
+	/** `peer_packet` signal. */
+	public var peer_packet(get, never):godot.Signal;
+	@:noCompletion function get_peer_packet():godot.Signal {
+		return godot.Signal.fromObject(this, "peer_packet");
+	}
 	@:keep public static inline var SIGNAL_PEER_PACKET:String = "peer_packet";
 }

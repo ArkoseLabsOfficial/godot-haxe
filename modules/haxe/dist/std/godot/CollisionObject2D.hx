@@ -183,10 +183,40 @@ class CollisionObject2D extends godot.Node2D {
 	public function shape_find_owner(shape_index:Int):Int {
 		return cast Native.call(__hxgodotId, "shape_find_owner", [shape_index]);
 	}
+
+	/** `input_event` signal. */
+	public var input_event(get, never):godot.Signal;
+	@:noCompletion function get_input_event():godot.Signal {
+		return godot.Signal.fromObject(this, "input_event");
+	}
 	@:keep public static inline var SIGNAL_INPUT_EVENT:String = "input_event";
+
+	/** `mouse_entered` signal. */
+	public var mouse_entered(get, never):godot.Signal;
+	@:noCompletion function get_mouse_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_entered");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_ENTERED:String = "mouse_entered";
+
+	/** `mouse_exited` signal. */
+	public var mouse_exited(get, never):godot.Signal;
+	@:noCompletion function get_mouse_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_exited");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_EXITED:String = "mouse_exited";
+
+	/** `mouse_shape_entered` signal. */
+	public var mouse_shape_entered(get, never):godot.Signal;
+	@:noCompletion function get_mouse_shape_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_shape_entered");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_SHAPE_ENTERED:String = "mouse_shape_entered";
+
+	/** `mouse_shape_exited` signal. */
+	public var mouse_shape_exited(get, never):godot.Signal;
+	@:noCompletion function get_mouse_shape_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_shape_exited");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_SHAPE_EXITED:String = "mouse_shape_exited";
 	@:keep public static var DISABLE_MODE_REMOVE:Int = 0;
 	@:keep public static var DISABLE_MODE_MAKE_STATIC:Int = 1;

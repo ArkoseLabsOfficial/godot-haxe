@@ -33,7 +33,7 @@ class VisualShader extends godot.Shader {
 		Native.call(__hxgodotId, "add_node", [type, node, position, id]);
 	}
 
-	public function get_node(type:Int, id:Int):godot.VisualShaderNode {
+	public function get_node<T:VisualShaderNode>(type:Int, id:Int, ?__type:Class<T>):T {
 		return cast Native.call(__hxgodotId, "get_node", [type, id]);
 	}
 

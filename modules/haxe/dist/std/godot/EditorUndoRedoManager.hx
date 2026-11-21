@@ -67,7 +67,19 @@ class EditorUndoRedoManager extends godot.Object {
 	public function clear_history(id:Int = -99, increase_version:Bool = true):Void {
 		Native.call(__hxgodotId, "clear_history", [id, increase_version]);
 	}
+
+	/** `history_changed` signal. */
+	public var history_changed(get, never):godot.Signal;
+	@:noCompletion function get_history_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "history_changed");
+	}
 	@:keep public static inline var SIGNAL_HISTORY_CHANGED:String = "history_changed";
+
+	/** `version_changed` signal. */
+	public var version_changed(get, never):godot.Signal;
+	@:noCompletion function get_version_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "version_changed");
+	}
 	@:keep public static inline var SIGNAL_VERSION_CHANGED:String = "version_changed";
 	@:keep public static var GLOBAL_HISTORY:Int = 0;
 	@:keep public static var REMOTE_HISTORY:Int = -9;

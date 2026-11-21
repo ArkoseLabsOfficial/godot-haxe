@@ -17,6 +17,12 @@ class ResourceUID extends godot.Object {
 		return cast Native.singleton("ResourceUID");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ResourceUID;
+	@:noCompletion static function get_singleton():godot.ResourceUID {
+		return cast Native.singleton("ResourceUID");
+	}
+
 	@:keep public static var INVALID_ID:Int = -1;
 
 	public function id_to_text(id:Int):String {

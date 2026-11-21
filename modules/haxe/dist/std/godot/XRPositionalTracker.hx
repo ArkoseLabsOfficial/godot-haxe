@@ -69,12 +69,54 @@ class XRPositionalTracker extends godot.XRTracker {
 	public function set_input(name:String, value:Dynamic):Void {
 		Native.call(__hxgodotId, "set_input", [name, value]);
 	}
+
+	/** `pose_changed` signal. */
+	public var pose_changed(get, never):godot.Signal;
+	@:noCompletion function get_pose_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "pose_changed");
+	}
 	@:keep public static inline var SIGNAL_POSE_CHANGED:String = "pose_changed";
+
+	/** `pose_lost_tracking` signal. */
+	public var pose_lost_tracking(get, never):godot.Signal;
+	@:noCompletion function get_pose_lost_tracking():godot.Signal {
+		return godot.Signal.fromObject(this, "pose_lost_tracking");
+	}
 	@:keep public static inline var SIGNAL_POSE_LOST_TRACKING:String = "pose_lost_tracking";
+
+	/** `button_pressed` signal. */
+	public var button_pressed(get, never):godot.Signal;
+	@:noCompletion function get_button_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "button_pressed");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_PRESSED:String = "button_pressed";
+
+	/** `button_released` signal. */
+	public var button_released(get, never):godot.Signal;
+	@:noCompletion function get_button_released():godot.Signal {
+		return godot.Signal.fromObject(this, "button_released");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_RELEASED:String = "button_released";
+
+	/** `input_float_changed` signal. */
+	public var input_float_changed(get, never):godot.Signal;
+	@:noCompletion function get_input_float_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "input_float_changed");
+	}
 	@:keep public static inline var SIGNAL_INPUT_FLOAT_CHANGED:String = "input_float_changed";
+
+	/** `input_vector2_changed` signal. */
+	public var input_vector2_changed(get, never):godot.Signal;
+	@:noCompletion function get_input_vector2_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "input_vector2_changed");
+	}
 	@:keep public static inline var SIGNAL_INPUT_VECTOR2_CHANGED:String = "input_vector2_changed";
+
+	/** `profile_changed` signal. */
+	public var profile_changed(get, never):godot.Signal;
+	@:noCompletion function get_profile_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "profile_changed");
+	}
 	@:keep public static inline var SIGNAL_PROFILE_CHANGED:String = "profile_changed";
 	@:keep public static var TRACKER_HAND_UNKNOWN:Int = 0;
 	@:keep public static var TRACKER_HAND_LEFT:Int = 1;

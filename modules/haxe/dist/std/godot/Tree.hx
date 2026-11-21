@@ -359,20 +359,110 @@ class Tree extends godot.Control {
 	public function is_auto_tooltip_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_auto_tooltip_enabled", []);
 	}
+
+	/** `item_selected` signal. */
+	public var item_selected(get, never):godot.Signal;
+	@:noCompletion function get_item_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "item_selected");
+	}
 	@:keep public static inline var SIGNAL_ITEM_SELECTED:String = "item_selected";
+
+	/** `cell_selected` signal. */
+	public var cell_selected(get, never):godot.Signal;
+	@:noCompletion function get_cell_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "cell_selected");
+	}
 	@:keep public static inline var SIGNAL_CELL_SELECTED:String = "cell_selected";
+
+	/** `multi_selected` signal. */
+	public var multi_selected(get, never):godot.Signal;
+	@:noCompletion function get_multi_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "multi_selected");
+	}
 	@:keep public static inline var SIGNAL_MULTI_SELECTED:String = "multi_selected";
+
+	/** `item_mouse_selected` signal. */
+	public var item_mouse_selected(get, never):godot.Signal;
+	@:noCompletion function get_item_mouse_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "item_mouse_selected");
+	}
 	@:keep public static inline var SIGNAL_ITEM_MOUSE_SELECTED:String = "item_mouse_selected";
+
+	/** `empty_clicked` signal. */
+	public var empty_clicked(get, never):godot.Signal;
+	@:noCompletion function get_empty_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "empty_clicked");
+	}
 	@:keep public static inline var SIGNAL_EMPTY_CLICKED:String = "empty_clicked";
+
+	/** `item_edited` signal. */
+	public var item_edited(get, never):godot.Signal;
+	@:noCompletion function get_item_edited():godot.Signal {
+		return godot.Signal.fromObject(this, "item_edited");
+	}
 	@:keep public static inline var SIGNAL_ITEM_EDITED:String = "item_edited";
+
+	/** `custom_item_clicked` signal. */
+	public var custom_item_clicked(get, never):godot.Signal;
+	@:noCompletion function get_custom_item_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "custom_item_clicked");
+	}
 	@:keep public static inline var SIGNAL_CUSTOM_ITEM_CLICKED:String = "custom_item_clicked";
+
+	/** `item_icon_double_clicked` signal. */
+	public var item_icon_double_clicked(get, never):godot.Signal;
+	@:noCompletion function get_item_icon_double_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "item_icon_double_clicked");
+	}
 	@:keep public static inline var SIGNAL_ITEM_ICON_DOUBLE_CLICKED:String = "item_icon_double_clicked";
+
+	/** `item_collapsed` signal. */
+	public var item_collapsed(get, never):godot.Signal;
+	@:noCompletion function get_item_collapsed():godot.Signal {
+		return godot.Signal.fromObject(this, "item_collapsed");
+	}
 	@:keep public static inline var SIGNAL_ITEM_COLLAPSED:String = "item_collapsed";
+
+	/** `check_propagated_to_item` signal. */
+	public var check_propagated_to_item(get, never):godot.Signal;
+	@:noCompletion function get_check_propagated_to_item():godot.Signal {
+		return godot.Signal.fromObject(this, "check_propagated_to_item");
+	}
 	@:keep public static inline var SIGNAL_CHECK_PROPAGATED_TO_ITEM:String = "check_propagated_to_item";
+
+	/** `button_clicked` signal. */
+	public var button_clicked(get, never):godot.Signal;
+	@:noCompletion function get_button_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "button_clicked");
+	}
 	@:keep public static inline var SIGNAL_BUTTON_CLICKED:String = "button_clicked";
+
+	/** `custom_popup_edited` signal. */
+	public var custom_popup_edited(get, never):godot.Signal;
+	@:noCompletion function get_custom_popup_edited():godot.Signal {
+		return godot.Signal.fromObject(this, "custom_popup_edited");
+	}
 	@:keep public static inline var SIGNAL_CUSTOM_POPUP_EDITED:String = "custom_popup_edited";
+
+	/** `item_activated` signal. */
+	public var item_activated(get, never):godot.Signal;
+	@:noCompletion function get_item_activated():godot.Signal {
+		return godot.Signal.fromObject(this, "item_activated");
+	}
 	@:keep public static inline var SIGNAL_ITEM_ACTIVATED:String = "item_activated";
+
+	/** `column_title_clicked` signal. */
+	public var column_title_clicked(get, never):godot.Signal;
+	@:noCompletion function get_column_title_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "column_title_clicked");
+	}
 	@:keep public static inline var SIGNAL_COLUMN_TITLE_CLICKED:String = "column_title_clicked";
+
+	/** `nothing_selected` signal. */
+	public var nothing_selected(get, never):godot.Signal;
+	@:noCompletion function get_nothing_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "nothing_selected");
+	}
 	@:keep public static inline var SIGNAL_NOTHING_SELECTED:String = "nothing_selected";
 	@:keep public static var SELECT_SINGLE:Int = 0;
 	@:keep public static var SELECT_ROW:Int = 1;

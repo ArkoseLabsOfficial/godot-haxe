@@ -189,6 +189,18 @@ class GraphNode extends godot.GraphElement {
 	public function get_output_port_slot(port_idx:Int):Int {
 		return cast Native.call(__hxgodotId, "get_output_port_slot", [port_idx]);
 	}
+
+	/** `slot_updated` signal. */
+	public var slot_updated(get, never):godot.Signal;
+	@:noCompletion function get_slot_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "slot_updated");
+	}
 	@:keep public static inline var SIGNAL_SLOT_UPDATED:String = "slot_updated";
+
+	/** `slot_sizes_changed` signal. */
+	public var slot_sizes_changed(get, never):godot.Signal;
+	@:noCompletion function get_slot_sizes_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "slot_sizes_changed");
+	}
 	@:keep public static inline var SIGNAL_SLOT_SIZES_CHANGED:String = "slot_sizes_changed";
 }

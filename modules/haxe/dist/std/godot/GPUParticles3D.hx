@@ -386,6 +386,12 @@ class GPUParticles3D extends godot.GeometryInstance3D {
 	public function request_particles_process(process_time:Float, process_time_residual:Float = 0.0):Void {
 		Native.call(__hxgodotId, "request_particles_process", [process_time, process_time_residual]);
 	}
+
+	/** `finished` signal. */
+	public var finished(get, never):godot.Signal;
+	@:noCompletion function get_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "finished");
+	}
 	@:keep public static inline var SIGNAL_FINISHED:String = "finished";
 	@:keep public static var DRAW_ORDER_INDEX:Int = 0;
 	@:keep public static var DRAW_ORDER_LIFETIME:Int = 1;

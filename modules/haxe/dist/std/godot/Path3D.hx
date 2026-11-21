@@ -30,6 +30,18 @@ class Path3D extends godot.Node3D {
 		Native.call(__hxgodotId, "set_debug_custom_color", [value]);
 		return value;
 	}
+
+	/** `curve_changed` signal. */
+	public var curve_changed(get, never):godot.Signal;
+	@:noCompletion function get_curve_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "curve_changed");
+	}
 	@:keep public static inline var SIGNAL_CURVE_CHANGED:String = "curve_changed";
+
+	/** `debug_color_changed` signal. */
+	public var debug_color_changed(get, never):godot.Signal;
+	@:noCompletion function get_debug_color_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "debug_color_changed");
+	}
 	@:keep public static inline var SIGNAL_DEBUG_COLOR_CHANGED:String = "debug_color_changed";
 }

@@ -114,7 +114,19 @@ class CameraFeed extends godot.RefCounted {
 	public function set_format(index:Int, parameters:godot.Dictionary):Bool {
 		return cast Native.call(__hxgodotId, "set_format", [index, parameters]);
 	}
+
+	/** `frame_changed` signal. */
+	public var frame_changed(get, never):godot.Signal;
+	@:noCompletion function get_frame_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_changed");
+	}
 	@:keep public static inline var SIGNAL_FRAME_CHANGED:String = "frame_changed";
+
+	/** `format_changed` signal. */
+	public var format_changed(get, never):godot.Signal;
+	@:noCompletion function get_format_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "format_changed");
+	}
 	@:keep public static inline var SIGNAL_FORMAT_CHANGED:String = "format_changed";
 	@:keep public static var FEED_NOIMAGE:Int = 0;
 	@:keep public static var FEED_RGB:Int = 1;

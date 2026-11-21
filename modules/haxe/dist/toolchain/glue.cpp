@@ -95,8 +95,13 @@ thread_local std::vector<int64_t> t_unpin_objects;
 
 /* Set while hxgodot_create() runs a Haxe constructor for a script instance:
  * the engine object already exists, so generated `new()` must not create
- * another one. */
+ * another one. The id and class of the object under construction are kept so
+ * the generated `super()` chain can bind the existing node to the wrapper
+ * before the constructor body runs; a constructor is allowed to call engine
+ * methods (`centered = false`, ...) on `this`. */
 thread_local bool t_creating_script_instance = false;
+thread_local int64_t t_script_object_id = 0;
+thread_local void *t_script_class = nullptr;
 
 /* hxcpp finds the Haxe objects that are still in use by conservatively
  * scanning the native stack, from the current stack pointer up to the "top of
@@ -324,6 +329,11 @@ hx::Class resolve_object_wrapper(const char *p_class) {
 	int guard = 0;
 	while (!current.empty() && guard++ < 128) {
 		result = hx::Class_obj::Resolve(String("godot.") + String(current.c_str()));
+		if (result.mPtr == nullptr) {
+			// A GDScript stub (`class Hud extends godot.Node2D`) lives in the
+			// top level package, next to the project's own classes.
+			result = hx::Class_obj::Resolve(String(current.c_str()));
+		}
 		if (result.mPtr != nullptr) {
 			break;
 		}
@@ -1257,7 +1267,18 @@ Dynamic wrap_engine_object(int64_t p_object, bool p_pin, bool p_take_reference) 
 		release_handed_reference(p_object, p_take_reference);
 		return null();
 	}
-	hx::Class cls = resolve_object_wrapper(class_name);
+	/* A GDScript class instance is a plain engine object with a script
+	 * attached. When the script has a `class_name`, wrap the object as the
+	 * stub class generated for it, so `get_node("x", MyClass)` and instances
+	 * returned from a call are typed as `MyClass` and expose its members. */
+	char script_name[512] = {};
+	if (g_host.utility != nullptr) {
+		HxValue name_value = {};
+		if (g_host.utility("script_class_name", p_object, nullptr, &name_value) == 0 && name_value.s != nullptr && name_value.s[0] != '\0') {
+			snprintf(script_name, sizeof(script_name), "%s", name_value.s);
+		}
+	}
+	hx::Class cls = resolve_object_wrapper(script_name[0] != '\0' ? script_name : class_name);
 	if (cls.mPtr == nullptr) {
 		release_handed_reference(p_object, p_take_reference);
 		return null();
@@ -1937,10 +1958,25 @@ extern "C" HXGODOT_EXPORT int hxgodot_create(int64_t p_object_id, const char *p_
 			return -1;
 		}
 		Array<Dynamic> arguments = Array_obj<Dynamic>::__new();
+		/* Save and restore instead of clearing: writing the field of a script
+		 * instance can create another one (a Haxe constructor that attaches a
+		 * script), and the outer construction must resume with its own id. */
 		struct CreationFlag {
-			CreationFlag() { t_creating_script_instance = true; }
-			~CreationFlag() { t_creating_script_instance = false; }
-		} creation_flag;
+			int64_t previous_id;
+			void *previous_class;
+			bool previous_creating;
+			CreationFlag(int64_t p_id, void *p_class)
+					: previous_id(t_script_object_id), previous_class(t_script_class), previous_creating(t_creating_script_instance) {
+				t_script_object_id = p_id;
+				t_script_class = p_class;
+				t_creating_script_instance = true;
+			}
+			~CreationFlag() {
+				t_script_object_id = previous_id;
+				t_script_class = previous_class;
+				t_creating_script_instance = previous_creating;
+			}
+		} creation_flag(p_object_id, cls.mPtr);
 		Dynamic instance = cls->ConstructArgs(arguments);
 		if (!instance.mPtr) {
 			set_error(String("could not instantiate ") + String(p_class_name));
@@ -2401,6 +2437,22 @@ Dynamic hxgodot_haxe_create_object(String p_class) {
 	return wrap_engine_object((int64_t)strtoll(id.utf8_str(), nullptr, 10), true, false);
 }
 
+/* Used by generated `new()` before it creates anything: returns the id of the
+ * engine object the current script instance is being constructed for, or an
+ * empty string when this wrapper is not that object. The wrapper's runtime
+ * class has to match the class hxgodot_create() is constructing, so field
+ * initializers that build unrelated engine objects never steal the id. */
+String hxgodot_haxe_script_self_id(Dynamic p_wrapper) {
+	if (!t_creating_script_instance || p_wrapper.mPtr == nullptr ||
+			t_script_object_id == 0 || t_script_class == nullptr) {
+		return String();
+	}
+	if ((void *)p_wrapper.mPtr->__GetClass().mPtr != t_script_class) {
+		return String();
+	}
+	return String(t_script_object_id);
+}
+
 /* Used by generated `new()`: creates the engine object and returns its id, or
  * an empty string when the object is materialised by the engine instead
  * (script instances). The wrapper is bound by hxgodot_haxe_bind_wrapper(). */
@@ -2478,6 +2530,22 @@ bool hxgodot_haxe_is_ref_counted(String p_object_id) {
 		return false;
 	}
 	return g_host.is_ref_counted((int64_t)strtoll(p_object_id.utf8_str(), nullptr, 10)) != 0;
+}
+
+bool hxgodot_haxe_update_texture(String p_texture_id, const void *p_pixels, int p_size, int p_width, int p_height, int p_format) {
+	drain_pending();
+	if (g_host.update_texture == nullptr || p_pixels == nullptr) {
+		return false;
+	}
+	return g_host.update_texture((int64_t)strtoll(p_texture_id.utf8_str(), nullptr, 10), p_pixels, (int64_t)p_size, p_width, p_height, p_format) == 0;
+}
+
+int hxgodot_haxe_push_audio_frames(String p_playback_id, const void *p_samples, int p_frames, int p_channels) {
+	drain_pending();
+	if (g_host.push_audio_frames == nullptr || p_samples == nullptr) {
+		return -1;
+	}
+	return g_host.push_audio_frames((int64_t)strtoll(p_playback_id.utf8_str(), nullptr, 10), p_samples, p_frames, p_channels);
 }
 
 int hxgodot_haxe_store_closure(Dynamic p_function) {

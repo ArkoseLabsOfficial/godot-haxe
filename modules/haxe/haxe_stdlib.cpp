@@ -249,35 +249,7 @@ bool HaxeStdLibrary::parse_file(const String &p_fq_name, HaxeClassInfo &r_info) 
 	if (parse_haxe_source(source, path, file_info) != OK || !file_info.valid) {
 		return false;
 	}
-	String short_name = p_fq_name;
-	int separator = short_name.rfind(".");
-	if (separator >= 0) {
-		short_name = short_name.substr(separator + 1);
-	}
-	if (file_info.name == short_name || file_info.fq_name == p_fq_name) {
-		r_info = file_info;
-		r_info.fq_name = p_fq_name;
-		return true;
-	}
-	for (const HaxeSecondaryTypeInfo &type : file_info.secondary_types) {
-		if (type.name != short_name) {
-			continue;
-		}
-		r_info = HaxeClassInfo();
-		r_info.valid = true;
-		r_info.path = file_info.path;
-		r_info.package = file_info.package;
-		r_info.name = type.name;
-		r_info.base = type.base;
-		r_info.class_line = type.line;
-		r_info.is_abstract = type.is_abstract;
-		r_info.fq_name = p_fq_name;
-		r_info.members = type.members;
-		r_info.variables = type.variables;
-		r_info.functions = type.functions;
-		return true;
-	}
-	return false;
+	return haxe_module_find_type(file_info, p_fq_name, r_info);
 }
 
 bool HaxeStdLibrary::get_type_info(const String &p_name, HaxeClassInfo &r_info) {

@@ -287,7 +287,19 @@ class GridMap extends godot.Node3D {
 	public function make_baked_meshes(gen_lightmap_uv:Bool = false, lightmap_uv_texel_size:Float = 0.1):Void {
 		Native.call(__hxgodotId, "make_baked_meshes", [gen_lightmap_uv, lightmap_uv_texel_size]);
 	}
+
+	/** `cell_size_changed` signal. */
+	public var cell_size_changed(get, never):godot.Signal;
+	@:noCompletion function get_cell_size_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "cell_size_changed");
+	}
 	@:keep public static inline var SIGNAL_CELL_SIZE_CHANGED:String = "cell_size_changed";
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
 	@:keep public static var DEBUG_VISIBILITY_MODE_DEFAULT:Int = 0;
 	@:keep public static var DEBUG_VISIBILITY_MODE_FORCE_SHOW:Int = 1;

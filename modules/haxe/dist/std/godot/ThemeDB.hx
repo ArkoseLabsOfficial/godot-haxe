@@ -17,6 +17,12 @@ class ThemeDB extends godot.Object {
 		return cast Native.singleton("ThemeDB");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ThemeDB;
+	@:noCompletion static function get_singleton():godot.ThemeDB {
+		return cast Native.singleton("ThemeDB");
+	}
+
 	public var fallback_base_scale(get, set):Float;
 	@:noCompletion function get_fallback_base_scale():Float {
 		return cast Native.call(__hxgodotId, "get_fallback_base_scale", []);
@@ -68,6 +74,12 @@ class ThemeDB extends godot.Object {
 
 	public function get_project_theme():godot.Theme {
 		return cast Native.call(__hxgodotId, "get_project_theme", []);
+	}
+
+	/** `fallback_changed` signal. */
+	public var fallback_changed(get, never):godot.Signal;
+	@:noCompletion function get_fallback_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "fallback_changed");
 	}
 	@:keep public static inline var SIGNAL_FALLBACK_CHANGED:String = "fallback_changed";
 }

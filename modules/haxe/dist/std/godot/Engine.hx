@@ -17,6 +17,12 @@ class Engine extends godot.Object {
 		return cast Native.singleton("Engine");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Engine;
+	@:noCompletion static function get_singleton():godot.Engine {
+		return cast Native.singleton("Engine");
+	}
+
 	public var print_error_messages(get, set):Bool;
 	@:noCompletion function get_print_error_messages():Bool {
 		return cast Native.call(__hxgodotId, "is_printing_error_messages", []);

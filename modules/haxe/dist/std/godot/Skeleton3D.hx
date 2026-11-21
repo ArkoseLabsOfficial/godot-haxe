@@ -246,11 +246,47 @@ class Skeleton3D extends godot.Node3D {
 	public function physical_bones_remove_collision_exception(exception:godot.RID):Void {
 		Native.call(__hxgodotId, "physical_bones_remove_collision_exception", [exception]);
 	}
+
+	/** `rest_updated` signal. */
+	public var rest_updated(get, never):godot.Signal;
+	@:noCompletion function get_rest_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "rest_updated");
+	}
 	@:keep public static inline var SIGNAL_REST_UPDATED:String = "rest_updated";
+
+	/** `pose_updated` signal. */
+	public var pose_updated(get, never):godot.Signal;
+	@:noCompletion function get_pose_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "pose_updated");
+	}
 	@:keep public static inline var SIGNAL_POSE_UPDATED:String = "pose_updated";
+
+	/** `skeleton_updated` signal. */
+	public var skeleton_updated(get, never):godot.Signal;
+	@:noCompletion function get_skeleton_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "skeleton_updated");
+	}
 	@:keep public static inline var SIGNAL_SKELETON_UPDATED:String = "skeleton_updated";
+
+	/** `bone_enabled_changed` signal. */
+	public var bone_enabled_changed(get, never):godot.Signal;
+	@:noCompletion function get_bone_enabled_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "bone_enabled_changed");
+	}
 	@:keep public static inline var SIGNAL_BONE_ENABLED_CHANGED:String = "bone_enabled_changed";
+
+	/** `bone_list_changed` signal. */
+	public var bone_list_changed(get, never):godot.Signal;
+	@:noCompletion function get_bone_list_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "bone_list_changed");
+	}
 	@:keep public static inline var SIGNAL_BONE_LIST_CHANGED:String = "bone_list_changed";
+
+	/** `show_rest_only_changed` signal. */
+	public var show_rest_only_changed(get, never):godot.Signal;
+	@:noCompletion function get_show_rest_only_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "show_rest_only_changed");
+	}
 	@:keep public static inline var SIGNAL_SHOW_REST_ONLY_CHANGED:String = "show_rest_only_changed";
 	@:keep public static var MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var MODIFIER_CALLBACK_MODE_PROCESS_IDLE:Int = 1;

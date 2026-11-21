@@ -103,6 +103,12 @@ class FoldableContainer extends godot.Container {
 	public function remove_title_bar_control(control:godot.Control):Void {
 		Native.call(__hxgodotId, "remove_title_bar_control", [control]);
 	}
+
+	/** `folding_changed` signal. */
+	public var folding_changed(get, never):godot.Signal;
+	@:noCompletion function get_folding_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "folding_changed");
+	}
 	@:keep public static inline var SIGNAL_FOLDING_CHANGED:String = "folding_changed";
 	@:keep public static var POSITION_TOP:Int = 0;
 	@:keep public static var POSITION_BOTTOM:Int = 1;

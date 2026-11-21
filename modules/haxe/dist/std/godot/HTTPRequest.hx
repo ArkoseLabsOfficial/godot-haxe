@@ -121,6 +121,12 @@ class HTTPRequest extends godot.Node {
 	public function set_https_proxy(host:String, port:Int):Void {
 		Native.call(__hxgodotId, "set_https_proxy", [host, port]);
 	}
+
+	/** `request_completed` signal. */
+	public var request_completed(get, never):godot.Signal;
+	@:noCompletion function get_request_completed():godot.Signal {
+		return godot.Signal.fromObject(this, "request_completed");
+	}
 	@:keep public static inline var SIGNAL_REQUEST_COMPLETED:String = "request_completed";
 	@:keep public static var RESULT_SUCCESS:Int = 0;
 	@:keep public static var RESULT_CHUNKED_BODY_SIZE_MISMATCH:Int = 1;

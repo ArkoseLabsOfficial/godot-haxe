@@ -39,6 +39,8 @@
 #include "core/templates/hash_set.h"
 #include "editor/editor_log.h"
 #include "editor/editor_node.h"
+#include "editor/run/run_instances_dialog.h"
+#include "editor/settings/editor_settings.h"
 #include "editor/settings/project_settings_editor.h"
 #include "main/main.h"
 #include "scene/gui/box_container.h"
@@ -69,6 +71,47 @@ String normalize_path(const String &p_path) {
 		return "res://" + relative;
 	}
 	return path;
+}
+
+/* Feature tags the project's next Run will start with.
+ *
+ * A Haxe library is compiled ahead of time, so a feature tag has to be a
+ * compiler define when the library is built, not only when the game process
+ * starts. The editor builds the game library before `EditorRun::run()` sets
+ * `GODOT_EDITOR_CUSTOM_FEATURES`, so the tags are read from the Run Instances
+ * dialog here (or from its persisted project metadata when the dialog has not
+ * been created yet). */
+Vector<String> run_feature_tags() {
+	Vector<String> features;
+	RunInstancesDialog *dialog = RunInstancesDialog::get_singleton();
+	if (dialog != nullptr) {
+		return dialog->get_run_features(0);
+	}
+	EditorSettings *settings = EditorSettings::get_singleton();
+	if (settings == nullptr) {
+		return features;
+	}
+	const String main_text = settings->get_project_metadata("debug_options", "run_main_feature_tags", "");
+	String raw_text = main_text;
+	if ((bool)settings->get_project_metadata("debug_options", "multiple_instances_enabled", false)) {
+		TypedArray<Dictionary> stored = settings->get_project_metadata("debug_options", "run_instances_config", TypedArray<Dictionary>());
+		if (stored.size() > 0) {
+			const Dictionary first = stored[0];
+			const String instance_tags = first.get("features", String());
+			if ((bool)first.get("override_features", false)) {
+				raw_text = instance_tags;
+			} else {
+				raw_text = main_text + "," + instance_tags;
+			}
+		}
+	}
+	for (const String &feature : raw_text.split(",")) {
+		String trimmed = feature.strip_edges();
+		if (!trimmed.is_empty() && !features.has(trimmed)) {
+			features.push_back(trimmed);
+		}
+	}
+	return features;
 }
 
 } // namespace
@@ -148,10 +191,10 @@ void HaxeEditorPlugin::_notification(int p_what) {
 			add_control_to_bottom_panel(panel, TTR("Haxe"));
 
 			// The library manager is a Project Settings tab, placed right
-			// after the "Plugins" tab.
+			// before the "GDExtension" tab.
 			ProjectSettingsEditor *project_settings = ProjectSettingsEditor::get_singleton();
 			if (project_settings != nullptr) {
-				libraries_panel->set_name(TTRC("Haxe"));
+				libraries_panel->set_name(TTRC("Haxelib"));
 				add_control_to_container(CONTAINER_PROJECT_SETTING_TAB_RIGHT, libraries_panel);
 				TabContainer *tabs = project_settings->get_tabs();
 				if (tabs != nullptr) {
@@ -169,6 +212,11 @@ void HaxeEditorPlugin::_notification(int p_what) {
 			}
 
 			_update_status();
+
+			// Library classes that declare `@:globalClass` (hxvlc's `Video`,
+			// for example) are registered so they appear in "Create Node" like
+			// a project class, without a `.gdignore`d source being scanned.
+			HaxeProject::sync_library_global_classes();
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
@@ -206,6 +254,10 @@ bool HaxeEditorPlugin::_apply_build_result(const HaxeBuild::Result &p_result, St
 		} else {
 			status_label->set_text(vformat(TTR("Haxe build finished: %s"), p_result.library_path));
 		}
+		// A build may have followed a library install or version switch, so
+		// the registered library classes are brought in line with the sources
+		// that were just compiled.
+		HaxeProject::sync_library_global_classes();
 	} else {
 		r_error = p_result.message;
 		status_label->set_text(vformat(TTR("Haxe build failed: %s"), p_result.message));
@@ -295,12 +347,21 @@ bool HaxeEditorPlugin::build() {
 	if (language->has_build_session()) {
 		(void)language->take_build_result();
 	}
+	// Feature tags are compile time switches for the game library: a tag such
+	// as `MOBILE_BUTTONS` has to be a compiler define while the library is
+	// built, exactly as it is for an export. The tags a Run uses are known
+	// before `EditorRun::run()` sets `GODOT_EDITOR_CUSTOM_FEATURES`, so they
+	// are passed to this build explicitly. `prepare()` consumes them
+	// synchronously, so they are cleared as soon as the build starts.
+	HaxeBuild::set_runtime_features(run_feature_tags());
 	if (!language->start_build(false, false, false)) {
+		HaxeBuild::set_runtime_features(Vector<String>());
 		run_build_active = false;
 		String error;
 		_apply_build_result(HaxeBuild::Result::failed(TTR("The Haxe build could not be started.")), error);
 		return false;
 	}
+	HaxeBuild::set_runtime_features(Vector<String>());
 
 	// The editor blocks on this call, so the main loop is pumped while the
 	// compiler runs. That is what Godot's own export code does while it waits

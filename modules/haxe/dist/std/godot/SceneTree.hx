@@ -260,14 +260,68 @@ class SceneTree extends godot.MainLoop {
 	public function is_multiplayer_poll_enabled():Bool {
 		return cast Native.call(__hxgodotId, "is_multiplayer_poll_enabled", []);
 	}
+
+	/** `tree_changed` signal. */
+	public var tree_changed(get, never):godot.Signal;
+	@:noCompletion function get_tree_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_changed");
+	}
 	@:keep public static inline var SIGNAL_TREE_CHANGED:String = "tree_changed";
+
+	/** `scene_changed` signal. */
+	public var scene_changed(get, never):godot.Signal;
+	@:noCompletion function get_scene_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "scene_changed");
+	}
 	@:keep public static inline var SIGNAL_SCENE_CHANGED:String = "scene_changed";
+
+	/** `tree_process_mode_changed` signal. */
+	public var tree_process_mode_changed(get, never):godot.Signal;
+	@:noCompletion function get_tree_process_mode_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_process_mode_changed");
+	}
 	@:keep public static inline var SIGNAL_TREE_PROCESS_MODE_CHANGED:String = "tree_process_mode_changed";
+
+	/** `node_added` signal. */
+	public var node_added(get, never):godot.Signal;
+	@:noCompletion function get_node_added():godot.Signal {
+		return godot.Signal.fromObject(this, "node_added");
+	}
 	@:keep public static inline var SIGNAL_NODE_ADDED:String = "node_added";
+
+	/** `node_removed` signal. */
+	public var node_removed(get, never):godot.Signal;
+	@:noCompletion function get_node_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "node_removed");
+	}
 	@:keep public static inline var SIGNAL_NODE_REMOVED:String = "node_removed";
+
+	/** `node_renamed` signal. */
+	public var node_renamed(get, never):godot.Signal;
+	@:noCompletion function get_node_renamed():godot.Signal {
+		return godot.Signal.fromObject(this, "node_renamed");
+	}
 	@:keep public static inline var SIGNAL_NODE_RENAMED:String = "node_renamed";
+
+	/** `node_configuration_warning_changed` signal. */
+	public var node_configuration_warning_changed(get, never):godot.Signal;
+	@:noCompletion function get_node_configuration_warning_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "node_configuration_warning_changed");
+	}
 	@:keep public static inline var SIGNAL_NODE_CONFIGURATION_WARNING_CHANGED:String = "node_configuration_warning_changed";
+
+	/** `process_frame` signal. */
+	public var process_frame(get, never):godot.Signal;
+	@:noCompletion function get_process_frame():godot.Signal {
+		return godot.Signal.fromObject(this, "process_frame");
+	}
 	@:keep public static inline var SIGNAL_PROCESS_FRAME:String = "process_frame";
+
+	/** `physics_frame` signal. */
+	public var physics_frame(get, never):godot.Signal;
+	@:noCompletion function get_physics_frame():godot.Signal {
+		return godot.Signal.fromObject(this, "physics_frame");
+	}
 	@:keep public static inline var SIGNAL_PHYSICS_FRAME:String = "physics_frame";
 	@:keep public static var GROUP_CALL_DEFAULT:Int = 0;
 	@:keep public static var GROUP_CALL_REVERSE:Int = 1;

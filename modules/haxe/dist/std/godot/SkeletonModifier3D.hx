@@ -49,6 +49,12 @@ class SkeletonModifier3D extends godot.Node3D {
 	public function is_active():Bool {
 		return cast Native.call(__hxgodotId, "is_active", []);
 	}
+
+	/** `modification_processed` signal. */
+	public var modification_processed(get, never):godot.Signal;
+	@:noCompletion function get_modification_processed():godot.Signal {
+		return godot.Signal.fromObject(this, "modification_processed");
+	}
 	@:keep public static inline var SIGNAL_MODIFICATION_PROCESSED:String = "modification_processed";
 	@:keep public static var BONE_AXIS_PLUS_X:Int = 0;
 	@:keep public static var BONE_AXIS_MINUS_X:Int = 1;

@@ -364,10 +364,46 @@ class NavigationAgent2D extends godot.Node {
 	public function get_avoidance_mask_value(mask_number:Int):Bool {
 		return cast Native.call(__hxgodotId, "get_avoidance_mask_value", [mask_number]);
 	}
+
+	/** `path_changed` signal. */
+	public var path_changed(get, never):godot.Signal;
+	@:noCompletion function get_path_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "path_changed");
+	}
 	@:keep public static inline var SIGNAL_PATH_CHANGED:String = "path_changed";
+
+	/** `target_reached` signal. */
+	public var target_reached(get, never):godot.Signal;
+	@:noCompletion function get_target_reached():godot.Signal {
+		return godot.Signal.fromObject(this, "target_reached");
+	}
 	@:keep public static inline var SIGNAL_TARGET_REACHED:String = "target_reached";
+
+	/** `waypoint_reached` signal. */
+	public var waypoint_reached(get, never):godot.Signal;
+	@:noCompletion function get_waypoint_reached():godot.Signal {
+		return godot.Signal.fromObject(this, "waypoint_reached");
+	}
 	@:keep public static inline var SIGNAL_WAYPOINT_REACHED:String = "waypoint_reached";
+
+	/** `link_reached` signal. */
+	public var link_reached(get, never):godot.Signal;
+	@:noCompletion function get_link_reached():godot.Signal {
+		return godot.Signal.fromObject(this, "link_reached");
+	}
 	@:keep public static inline var SIGNAL_LINK_REACHED:String = "link_reached";
+
+	/** `navigation_finished` signal. */
+	public var navigation_finished(get, never):godot.Signal;
+	@:noCompletion function get_navigation_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "navigation_finished");
+	}
 	@:keep public static inline var SIGNAL_NAVIGATION_FINISHED:String = "navigation_finished";
+
+	/** `velocity_computed` signal. */
+	public var velocity_computed(get, never):godot.Signal;
+	@:noCompletion function get_velocity_computed():godot.Signal {
+		return godot.Signal.fromObject(this, "velocity_computed");
+	}
 	@:keep public static inline var SIGNAL_VELOCITY_COMPUTED:String = "velocity_computed";
 }

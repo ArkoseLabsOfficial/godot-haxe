@@ -148,7 +148,19 @@ class Resource extends godot.RefCounted {
 	public function copy_from_resource(resource:godot.Resource):godot.GD.Error {
 		return cast Native.call(__hxgodotId, "copy_from_resource", [resource]);
 	}
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
+
+	/** `setup_local_to_scene_requested` signal. */
+	public var setup_local_to_scene_requested(get, never):godot.Signal;
+	@:noCompletion function get_setup_local_to_scene_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "setup_local_to_scene_requested");
+	}
 	@:keep public static inline var SIGNAL_SETUP_LOCAL_TO_SCENE_REQUESTED:String = "setup_local_to_scene_requested";
 	@:keep public static var DEEP_DUPLICATE_NONE:Int = 0;
 	@:keep public static var DEEP_DUPLICATE_INTERNAL:Int = 1;

@@ -17,6 +17,12 @@ class Input extends godot.Object {
 		return cast Native.singleton("Input");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.Input;
+	@:noCompletion static function get_singleton():godot.Input {
+		return cast Native.singleton("Input");
+	}
+
 	public var mouse_mode(get, set):Int;
 	@:noCompletion function get_mouse_mode():Int {
 		return cast Native.call(__hxgodotId, "get_mouse_mode", []);
@@ -345,6 +351,12 @@ class Input extends godot.Object {
 
 	public function is_emulating_touch_from_mouse():Bool {
 		return cast Native.call(__hxgodotId, "is_emulating_touch_from_mouse", []);
+	}
+
+	/** `joy_connection_changed` signal. */
+	public var joy_connection_changed(get, never):godot.Signal;
+	@:noCompletion function get_joy_connection_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "joy_connection_changed");
 	}
 	@:keep public static inline var SIGNAL_JOY_CONNECTION_CHANGED:String = "joy_connection_changed";
 	@:keep public static var MOUSE_MODE_VISIBLE:Int = 0;

@@ -17,6 +17,12 @@ class XRServer extends godot.Object {
 		return cast Native.singleton("XRServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.XRServer;
+	@:noCompletion static function get_singleton():godot.XRServer {
+		return cast Native.singleton("XRServer");
+	}
+
 	public var world_scale(get, set):Float;
 	@:noCompletion function get_world_scale():Float {
 		return cast Native.call(__hxgodotId, "get_world_scale", []);
@@ -113,12 +119,54 @@ class XRServer extends godot.Object {
 	public function get_tracker(tracker_name:String):godot.XRTracker {
 		return cast Native.call(__hxgodotId, "get_tracker", [tracker_name]);
 	}
+
+	/** `reference_frame_changed` signal. */
+	public var reference_frame_changed(get, never):godot.Signal;
+	@:noCompletion function get_reference_frame_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "reference_frame_changed");
+	}
 	@:keep public static inline var SIGNAL_REFERENCE_FRAME_CHANGED:String = "reference_frame_changed";
+
+	/** `interface_added` signal. */
+	public var interface_added(get, never):godot.Signal;
+	@:noCompletion function get_interface_added():godot.Signal {
+		return godot.Signal.fromObject(this, "interface_added");
+	}
 	@:keep public static inline var SIGNAL_INTERFACE_ADDED:String = "interface_added";
+
+	/** `interface_removed` signal. */
+	public var interface_removed(get, never):godot.Signal;
+	@:noCompletion function get_interface_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "interface_removed");
+	}
 	@:keep public static inline var SIGNAL_INTERFACE_REMOVED:String = "interface_removed";
+
+	/** `tracker_added` signal. */
+	public var tracker_added(get, never):godot.Signal;
+	@:noCompletion function get_tracker_added():godot.Signal {
+		return godot.Signal.fromObject(this, "tracker_added");
+	}
 	@:keep public static inline var SIGNAL_TRACKER_ADDED:String = "tracker_added";
+
+	/** `tracker_updated` signal. */
+	public var tracker_updated(get, never):godot.Signal;
+	@:noCompletion function get_tracker_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "tracker_updated");
+	}
 	@:keep public static inline var SIGNAL_TRACKER_UPDATED:String = "tracker_updated";
+
+	/** `tracker_removed` signal. */
+	public var tracker_removed(get, never):godot.Signal;
+	@:noCompletion function get_tracker_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "tracker_removed");
+	}
 	@:keep public static inline var SIGNAL_TRACKER_REMOVED:String = "tracker_removed";
+
+	/** `world_origin_changed` signal. */
+	public var world_origin_changed(get, never):godot.Signal;
+	@:noCompletion function get_world_origin_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "world_origin_changed");
+	}
 	@:keep public static inline var SIGNAL_WORLD_ORIGIN_CHANGED:String = "world_origin_changed";
 	@:keep public static var TRACKER_HEAD:Int = 1;
 	@:keep public static var TRACKER_CONTROLLER:Int = 2;

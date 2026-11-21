@@ -155,8 +155,26 @@ class SplitContainer extends godot.Container {
 	public function get_drag_area_control():godot.Control {
 		return cast Native.call(__hxgodotId, "get_drag_area_control", []);
 	}
+
+	/** `dragged` signal. */
+	public var dragged(get, never):godot.Signal;
+	@:noCompletion function get_dragged():godot.Signal {
+		return godot.Signal.fromObject(this, "dragged");
+	}
 	@:keep public static inline var SIGNAL_DRAGGED:String = "dragged";
+
+	/** `drag_started` signal. */
+	public var drag_started(get, never):godot.Signal;
+	@:noCompletion function get_drag_started():godot.Signal {
+		return godot.Signal.fromObject(this, "drag_started");
+	}
 	@:keep public static inline var SIGNAL_DRAG_STARTED:String = "drag_started";
+
+	/** `drag_ended` signal. */
+	public var drag_ended(get, never):godot.Signal;
+	@:noCompletion function get_drag_ended():godot.Signal {
+		return godot.Signal.fromObject(this, "drag_ended");
+	}
 	@:keep public static inline var SIGNAL_DRAG_ENDED:String = "drag_ended";
 	@:keep public static var DRAGGER_VISIBLE:Int = 0;
 	@:keep public static var DRAGGER_HIDDEN:Int = 1;

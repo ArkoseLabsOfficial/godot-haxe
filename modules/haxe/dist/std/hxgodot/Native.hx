@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  Native.hx                                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 package hxgodot;
 
 /**
@@ -97,6 +127,34 @@ extern class Native {
 
 	@:native("hxgodot_haxe_is_ref_counted")
 	public static function isRefCounted(objectId:String):Bool;
+
+	/**
+	 * Uploads raw pixel data into an ImageTexture without marshalling a
+	 * `PackedByteArray`. `pixels` points at `size` bytes laid out in `format`
+	 * (a Godot Image::Format). Used by media decoders that own a native frame
+	 * buffer. The pointer is the byte pointer `cpp.NativeArray.getBase()`
+	 * yields, so no cast is needed on the caller side.
+	 */
+	@:native("hxgodot_haxe_update_texture")
+	public static function updateTexture(textureId:String, pixels:cpp.RawPointer<cpp.Char>, size:Int, width:Int, height:Int, format:Int):Bool;
+
+	/**
+	 * Pushes interleaved signed 16 bit PCM frames into an
+	 * AudioStreamGeneratorPlayback, converting to the engine's float frames on
+	 * the host. Returns the number of frames pushed, or a negative value on
+	 * failure. `samples` is the byte pointer `cpp.NativeArray.getBase()` yields.
+	 */
+	@:native("hxgodot_haxe_push_audio_frames")
+	public static function pushAudioFrames(playbackId:String, samples:cpp.RawPointer<cpp.Char>, frames:Int, channels:Int):Int;
+
+	/**
+	 * Returns the id of the engine object the current script constructor is
+	 * building when `wrapper` is that object, and an empty string otherwise.
+	 * It lets the generated `super()` chain bind the existing node before the
+	 * constructor body runs, so engine calls made from `new()` reach it.
+	 */
+	@:native("hxgodot_haxe_script_self_id")
+	public static function scriptSelfId(wrapper:Dynamic):String;
 
 	/**
 	 * Creates the engine object behind a generated `new()`.

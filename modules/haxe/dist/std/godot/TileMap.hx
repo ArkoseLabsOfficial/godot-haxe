@@ -281,6 +281,12 @@ class TileMap extends godot.Node2D {
 	public function get_neighbor_cell(coords:godot.Vector2i, neighbor:Int):godot.Vector2i {
 		return cast Native.call(__hxgodotId, "get_neighbor_cell", [coords, neighbor]);
 	}
+
+	/** `changed` signal. */
+	public var changed(get, never):godot.Signal;
+	@:noCompletion function get_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "changed");
+	}
 	@:keep public static inline var SIGNAL_CHANGED:String = "changed";
 	@:keep public static var VISIBILITY_MODE_DEFAULT:Int = 0;
 	@:keep public static var VISIBILITY_MODE_FORCE_HIDE:Int = 2;

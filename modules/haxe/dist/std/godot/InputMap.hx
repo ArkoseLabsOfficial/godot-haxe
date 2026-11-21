@@ -17,6 +17,12 @@ class InputMap extends godot.Object {
 		return cast Native.singleton("InputMap");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.InputMap;
+	@:noCompletion static function get_singleton():godot.InputMap {
+		return cast Native.singleton("InputMap");
+	}
+
 	public function has_action(action:String):Bool {
 		return cast Native.call(__hxgodotId, "has_action", [action]);
 	}
@@ -71,6 +77,12 @@ class InputMap extends godot.Object {
 
 	public function load_from_project_settings():Void {
 		Native.call(__hxgodotId, "load_from_project_settings", []);
+	}
+
+	/** `project_settings_loaded` signal. */
+	public var project_settings_loaded(get, never):godot.Signal;
+	@:noCompletion function get_project_settings_loaded():godot.Signal {
+		return godot.Signal.fromObject(this, "project_settings_loaded");
 	}
 	@:keep public static inline var SIGNAL_PROJECT_SETTINGS_LOADED:String = "project_settings_loaded";
 }

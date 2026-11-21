@@ -235,12 +235,54 @@ class TabContainer extends godot.Container {
 	public function get_popup():godot.Popup {
 		return cast Native.call(__hxgodotId, "get_popup", []);
 	}
+
+	/** `active_tab_rearranged` signal. */
+	public var active_tab_rearranged(get, never):godot.Signal;
+	@:noCompletion function get_active_tab_rearranged():godot.Signal {
+		return godot.Signal.fromObject(this, "active_tab_rearranged");
+	}
 	@:keep public static inline var SIGNAL_ACTIVE_TAB_REARRANGED:String = "active_tab_rearranged";
+
+	/** `tab_changed` signal. */
+	public var tab_changed(get, never):godot.Signal;
+	@:noCompletion function get_tab_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_changed");
+	}
 	@:keep public static inline var SIGNAL_TAB_CHANGED:String = "tab_changed";
+
+	/** `tab_clicked` signal. */
+	public var tab_clicked(get, never):godot.Signal;
+	@:noCompletion function get_tab_clicked():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_clicked");
+	}
 	@:keep public static inline var SIGNAL_TAB_CLICKED:String = "tab_clicked";
+
+	/** `tab_hovered` signal. */
+	public var tab_hovered(get, never):godot.Signal;
+	@:noCompletion function get_tab_hovered():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_hovered");
+	}
 	@:keep public static inline var SIGNAL_TAB_HOVERED:String = "tab_hovered";
+
+	/** `tab_selected` signal. */
+	public var tab_selected(get, never):godot.Signal;
+	@:noCompletion function get_tab_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_selected");
+	}
 	@:keep public static inline var SIGNAL_TAB_SELECTED:String = "tab_selected";
+
+	/** `tab_button_pressed` signal. */
+	public var tab_button_pressed(get, never):godot.Signal;
+	@:noCompletion function get_tab_button_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "tab_button_pressed");
+	}
 	@:keep public static inline var SIGNAL_TAB_BUTTON_PRESSED:String = "tab_button_pressed";
+
+	/** `pre_popup_pressed` signal. */
+	public var pre_popup_pressed(get, never):godot.Signal;
+	@:noCompletion function get_pre_popup_pressed():godot.Signal {
+		return godot.Signal.fromObject(this, "pre_popup_pressed");
+	}
 	@:keep public static inline var SIGNAL_PRE_POPUP_PRESSED:String = "pre_popup_pressed";
 	@:keep public static var POSITION_TOP:Int = 0;
 	@:keep public static var POSITION_BOTTOM:Int = 1;

@@ -19,14 +19,74 @@ class ScriptEditorBase extends godot.VBoxContainer {
 	public function get_base_editor():godot.Control {
 		return cast Native.call(__hxgodotId, "get_base_editor", []);
 	}
+
+	/** `name_changed` signal. */
+	public var name_changed(get, never):godot.Signal;
+	@:noCompletion function get_name_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "name_changed");
+	}
 	@:keep public static inline var SIGNAL_NAME_CHANGED:String = "name_changed";
+
+	/** `edited_script_changed` signal. */
+	public var edited_script_changed(get, never):godot.Signal;
+	@:noCompletion function get_edited_script_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "edited_script_changed");
+	}
 	@:keep public static inline var SIGNAL_EDITED_SCRIPT_CHANGED:String = "edited_script_changed";
+
+	/** `search_in_files_requested` signal. */
+	public var search_in_files_requested(get, never):godot.Signal;
+	@:noCompletion function get_search_in_files_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "search_in_files_requested");
+	}
 	@:keep public static inline var SIGNAL_SEARCH_IN_FILES_REQUESTED:String = "search_in_files_requested";
+
+	/** `request_save_history` signal. */
+	public var request_save_history(get, never):godot.Signal;
+	@:noCompletion function get_request_save_history():godot.Signal {
+		return godot.Signal.fromObject(this, "request_save_history");
+	}
 	@:keep public static inline var SIGNAL_REQUEST_SAVE_HISTORY:String = "request_save_history";
+
+	/** `request_help` signal. */
+	public var request_help(get, never):godot.Signal;
+	@:noCompletion function get_request_help():godot.Signal {
+		return godot.Signal.fromObject(this, "request_help");
+	}
 	@:keep public static inline var SIGNAL_REQUEST_HELP:String = "request_help";
+
+	/** `request_open_script_at_line` signal. */
+	public var request_open_script_at_line(get, never):godot.Signal;
+	@:noCompletion function get_request_open_script_at_line():godot.Signal {
+		return godot.Signal.fromObject(this, "request_open_script_at_line");
+	}
 	@:keep public static inline var SIGNAL_REQUEST_OPEN_SCRIPT_AT_LINE:String = "request_open_script_at_line";
+
+	/** `go_to_help` signal. */
+	public var go_to_help(get, never):godot.Signal;
+	@:noCompletion function get_go_to_help():godot.Signal {
+		return godot.Signal.fromObject(this, "go_to_help");
+	}
 	@:keep public static inline var SIGNAL_GO_TO_HELP:String = "go_to_help";
+
+	/** `request_save_previous_state` signal. */
+	public var request_save_previous_state(get, never):godot.Signal;
+	@:noCompletion function get_request_save_previous_state():godot.Signal {
+		return godot.Signal.fromObject(this, "request_save_previous_state");
+	}
 	@:keep public static inline var SIGNAL_REQUEST_SAVE_PREVIOUS_STATE:String = "request_save_previous_state";
+
+	/** `replace_in_files_requested` signal. */
+	public var replace_in_files_requested(get, never):godot.Signal;
+	@:noCompletion function get_replace_in_files_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "replace_in_files_requested");
+	}
 	@:keep public static inline var SIGNAL_REPLACE_IN_FILES_REQUESTED:String = "replace_in_files_requested";
+
+	/** `go_to_method` signal. */
+	public var go_to_method(get, never):godot.Signal;
+	@:noCompletion function get_go_to_method():godot.Signal {
+		return godot.Signal.fromObject(this, "go_to_method");
+	}
 	@:keep public static inline var SIGNAL_GO_TO_METHOD:String = "go_to_method";
 }

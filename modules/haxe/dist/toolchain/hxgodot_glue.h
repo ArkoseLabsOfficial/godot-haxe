@@ -81,10 +81,13 @@ int hxgodot_haxe_value_compare(Dynamic p_a, Dynamic p_b);
 Dynamic hxgodot_haxe_create_object(String p_class);
 Dynamic hxgodot_haxe_singleton(String p_name);
 
-/* Generated `new()` support. new_object returns the engine instance id, or an
- * empty string when the object is created by the engine (script instances).
- * bind_wrapper stores the id on the wrapper and keeps RefCounted values
- * pinned for as long as it lives. */
+/* Generated `new()` support. script_self_id returns the id of the object the
+ * current script constructor runs for when the wrapper is that object, so its
+ * engine calls reach the node before the constructor body runs. new_object
+ * returns the engine instance id, or an empty string when the object is
+ * created by the engine (script instances). bind_wrapper stores the id on the
+ * wrapper and keeps RefCounted values pinned for as long as it lives. */
+String hxgodot_haxe_script_self_id(Dynamic p_wrapper);
 String hxgodot_haxe_new_object(String p_class);
 void hxgodot_haxe_bind_wrapper(Dynamic p_wrapper, String p_object_id);
 bool hxgodot_haxe_in_script_creation();
@@ -94,6 +97,13 @@ Dynamic hxgodot_haxe_call_closure(int p_closure, Array<Dynamic> p_args);
 bool hxgodot_haxe_is_valid(String p_object_id);
 String hxgodot_haxe_class_name(String p_object_id);
 bool hxgodot_haxe_is_ref_counted(String p_object_id);
+
+/* Fast pixel and audio uploads that take a raw pointer instead of marshalling
+ * a packed array. Used by libraries that decode media on their own threads.
+ * The pointer is the byte buffer `cpp.NativeArray.getBase()` returns (a
+ * `char *`), so the parameter is `const void *` and no cast is needed there. */
+bool hxgodot_haxe_update_texture(String p_texture_id, const void *p_pixels, int p_size, int p_width, int p_height, int p_format);
+int hxgodot_haxe_push_audio_frames(String p_playback_id, const void *p_samples, int p_frames, int p_channels);
 
 /* Haxe closures handed to the engine as Callable values. `attach_*` installs
  * the GC finalizer that releases the native resource when the Haxe wrapper

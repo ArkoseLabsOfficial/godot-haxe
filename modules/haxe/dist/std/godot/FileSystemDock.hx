@@ -23,14 +23,74 @@ class FileSystemDock extends godot.EditorDock {
 	public function remove_resource_tooltip_plugin(plugin:godot.EditorResourceTooltipPlugin):Void {
 		Native.call(__hxgodotId, "remove_resource_tooltip_plugin", [plugin]);
 	}
+
+	/** `inherit` signal. */
+	public var inherit(get, never):godot.Signal;
+	@:noCompletion function get_inherit():godot.Signal {
+		return godot.Signal.fromObject(this, "inherit");
+	}
 	@:keep public static inline var SIGNAL_INHERIT:String = "inherit";
+
+	/** `instantiate` signal. */
+	public var instantiate(get, never):godot.Signal;
+	@:noCompletion function get_instantiate():godot.Signal {
+		return godot.Signal.fromObject(this, "instantiate");
+	}
 	@:keep public static inline var SIGNAL_INSTANTIATE:String = "instantiate";
+
+	/** `resource_removed` signal. */
+	public var resource_removed(get, never):godot.Signal;
+	@:noCompletion function get_resource_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "resource_removed");
+	}
 	@:keep public static inline var SIGNAL_RESOURCE_REMOVED:String = "resource_removed";
+
+	/** `file_removed` signal. */
+	public var file_removed(get, never):godot.Signal;
+	@:noCompletion function get_file_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "file_removed");
+	}
 	@:keep public static inline var SIGNAL_FILE_REMOVED:String = "file_removed";
+
+	/** `folder_removed` signal. */
+	public var folder_removed(get, never):godot.Signal;
+	@:noCompletion function get_folder_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "folder_removed");
+	}
 	@:keep public static inline var SIGNAL_FOLDER_REMOVED:String = "folder_removed";
+
+	/** `files_moved` signal. */
+	public var files_moved(get, never):godot.Signal;
+	@:noCompletion function get_files_moved():godot.Signal {
+		return godot.Signal.fromObject(this, "files_moved");
+	}
 	@:keep public static inline var SIGNAL_FILES_MOVED:String = "files_moved";
+
+	/** `folder_moved` signal. */
+	public var folder_moved(get, never):godot.Signal;
+	@:noCompletion function get_folder_moved():godot.Signal {
+		return godot.Signal.fromObject(this, "folder_moved");
+	}
 	@:keep public static inline var SIGNAL_FOLDER_MOVED:String = "folder_moved";
+
+	/** `folder_color_changed` signal. */
+	public var folder_color_changed(get, never):godot.Signal;
+	@:noCompletion function get_folder_color_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "folder_color_changed");
+	}
 	@:keep public static inline var SIGNAL_FOLDER_COLOR_CHANGED:String = "folder_color_changed";
+
+	/** `selection_changed` signal. */
+	public var selection_changed(get, never):godot.Signal;
+	@:noCompletion function get_selection_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "selection_changed");
+	}
 	@:keep public static inline var SIGNAL_SELECTION_CHANGED:String = "selection_changed";
+
+	/** `display_mode_changed` signal. */
+	public var display_mode_changed(get, never):godot.Signal;
+	@:noCompletion function get_display_mode_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "display_mode_changed");
+	}
 	@:keep public static inline var SIGNAL_DISPLAY_MODE_CHANGED:String = "display_mode_changed";
 }

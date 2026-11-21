@@ -1223,6 +1223,12 @@ class ParticleProcessMaterial extends godot.Material {
 	public function is_using_rotation_velocity_3d():Bool {
 		return cast Native.call(__hxgodotId, "is_using_rotation_velocity_3d", []);
 	}
+
+	/** `emission_shape_changed` signal. */
+	public var emission_shape_changed(get, never):godot.Signal;
+	@:noCompletion function get_emission_shape_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "emission_shape_changed");
+	}
 	@:keep public static inline var SIGNAL_EMISSION_SHAPE_CHANGED:String = "emission_shape_changed";
 	@:keep public static var PARAM_INITIAL_LINEAR_VELOCITY:Int = 0;
 	@:keep public static var PARAM_ANGULAR_VELOCITY:Int = 1;

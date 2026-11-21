@@ -313,9 +313,33 @@ class FileDialog extends godot.ConfirmationDialog {
 	public function invalidate():Void {
 		Native.call(__hxgodotId, "invalidate", []);
 	}
+
+	/** `file_selected` signal. */
+	public var file_selected(get, never):godot.Signal;
+	@:noCompletion function get_file_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "file_selected");
+	}
 	@:keep public static inline var SIGNAL_FILE_SELECTED:String = "file_selected";
+
+	/** `files_selected` signal. */
+	public var files_selected(get, never):godot.Signal;
+	@:noCompletion function get_files_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "files_selected");
+	}
 	@:keep public static inline var SIGNAL_FILES_SELECTED:String = "files_selected";
+
+	/** `dir_selected` signal. */
+	public var dir_selected(get, never):godot.Signal;
+	@:noCompletion function get_dir_selected():godot.Signal {
+		return godot.Signal.fromObject(this, "dir_selected");
+	}
 	@:keep public static inline var SIGNAL_DIR_SELECTED:String = "dir_selected";
+
+	/** `filename_filter_changed` signal. */
+	public var filename_filter_changed(get, never):godot.Signal;
+	@:noCompletion function get_filename_filter_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "filename_filter_changed");
+	}
 	@:keep public static inline var SIGNAL_FILENAME_FILTER_CHANGED:String = "filename_filter_changed";
 	@:keep public static var FILE_MODE_OPEN_FILE:Int = 0;
 	@:keep public static var FILE_MODE_OPEN_FILES:Int = 1;

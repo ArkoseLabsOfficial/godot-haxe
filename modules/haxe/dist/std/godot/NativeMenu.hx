@@ -17,6 +17,12 @@ class NativeMenu extends godot.Object {
 		return cast Native.singleton("NativeMenu");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.NativeMenu;
+	@:noCompletion static function get_singleton():godot.NativeMenu {
+		return cast Native.singleton("NativeMenu");
+	}
+
 	public function has_feature(feature:Int):Bool {
 		return cast Native.call(__hxgodotId, "has_feature", [feature]);
 	}

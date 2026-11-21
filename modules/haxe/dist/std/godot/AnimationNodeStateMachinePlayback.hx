@@ -67,6 +67,18 @@ class AnimationNodeStateMachinePlayback extends godot.Resource {
 	public function get_travel_path():Array<String> {
 		return cast Native.call(__hxgodotId, "get_travel_path", []);
 	}
+
+	/** `state_started` signal. */
+	public var state_started(get, never):godot.Signal;
+	@:noCompletion function get_state_started():godot.Signal {
+		return godot.Signal.fromObject(this, "state_started");
+	}
 	@:keep public static inline var SIGNAL_STATE_STARTED:String = "state_started";
+
+	/** `state_finished` signal. */
+	public var state_finished(get, never):godot.Signal;
+	@:noCompletion function get_state_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "state_finished");
+	}
 	@:keep public static inline var SIGNAL_STATE_FINISHED:String = "state_finished";
 }

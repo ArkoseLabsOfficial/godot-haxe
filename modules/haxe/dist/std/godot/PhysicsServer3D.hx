@@ -17,6 +17,12 @@ class PhysicsServer3D extends godot.Object {
 		return cast Native.singleton("PhysicsServer3D");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.PhysicsServer3D;
+	@:noCompletion static function get_singleton():godot.PhysicsServer3D {
+		return cast Native.singleton("PhysicsServer3D");
+	}
+
 	public function world_boundary_shape_create():godot.RID {
 		return cast Native.call(__hxgodotId, "world_boundary_shape_create", []);
 	}

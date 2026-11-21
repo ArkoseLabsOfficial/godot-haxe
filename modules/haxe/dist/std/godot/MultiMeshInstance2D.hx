@@ -29,5 +29,11 @@ class MultiMeshInstance2D extends godot.Node2D {
 		Native.call(__hxgodotId, "set_texture", [value]);
 		return value;
 	}
+
+	/** `texture_changed` signal. */
+	public var texture_changed(get, never):godot.Signal;
+	@:noCompletion function get_texture_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "texture_changed");
+	}
 	@:keep public static inline var SIGNAL_TEXTURE_CHANGED:String = "texture_changed";
 }

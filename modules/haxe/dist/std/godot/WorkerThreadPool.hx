@@ -17,6 +17,12 @@ class WorkerThreadPool extends godot.Object {
 		return cast Native.singleton("WorkerThreadPool");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.WorkerThreadPool;
+	@:noCompletion static function get_singleton():godot.WorkerThreadPool {
+		return cast Native.singleton("WorkerThreadPool");
+	}
+
 	public function add_task(action:Dynamic, high_priority:Bool = false, description:String = ""):Int {
 		return cast Native.call(__hxgodotId, "add_task", [action, high_priority, description]);
 	}

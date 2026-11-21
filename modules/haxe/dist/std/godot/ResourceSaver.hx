@@ -17,6 +17,12 @@ class ResourceSaver extends godot.Object {
 		return cast Native.singleton("ResourceSaver");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.ResourceSaver;
+	@:noCompletion static function get_singleton():godot.ResourceSaver {
+		return cast Native.singleton("ResourceSaver");
+	}
+
 	public function save(resource:godot.Resource, path:String = "", flags:Int = 0):godot.GD.Error {
 		return cast Native.call(__hxgodotId, "save", [resource, path, flags]);
 	}

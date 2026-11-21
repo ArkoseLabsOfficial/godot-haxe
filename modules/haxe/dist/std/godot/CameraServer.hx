@@ -17,6 +17,12 @@ class CameraServer extends godot.Object {
 		return cast Native.singleton("CameraServer");
 	}
 
+	/** The engine singleton instance (same as `instance()`). */
+	public static var singleton(get, never):godot.CameraServer;
+	@:noCompletion static function get_singleton():godot.CameraServer {
+		return cast Native.singleton("CameraServer");
+	}
+
 	public var monitoring_feeds(get, set):Bool;
 	@:noCompletion function get_monitoring_feeds():Bool {
 		return cast Native.call(__hxgodotId, "is_monitoring_feeds", []);
@@ -49,8 +55,26 @@ class CameraServer extends godot.Object {
 	public function remove_feed(feed:godot.CameraFeed):Void {
 		Native.call(__hxgodotId, "remove_feed", [feed]);
 	}
+
+	/** `camera_feed_added` signal. */
+	public var camera_feed_added(get, never):godot.Signal;
+	@:noCompletion function get_camera_feed_added():godot.Signal {
+		return godot.Signal.fromObject(this, "camera_feed_added");
+	}
 	@:keep public static inline var SIGNAL_CAMERA_FEED_ADDED:String = "camera_feed_added";
+
+	/** `camera_feed_removed` signal. */
+	public var camera_feed_removed(get, never):godot.Signal;
+	@:noCompletion function get_camera_feed_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "camera_feed_removed");
+	}
 	@:keep public static inline var SIGNAL_CAMERA_FEED_REMOVED:String = "camera_feed_removed";
+
+	/** `camera_feeds_updated` signal. */
+	public var camera_feeds_updated(get, never):godot.Signal;
+	@:noCompletion function get_camera_feeds_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "camera_feeds_updated");
+	}
 	@:keep public static inline var SIGNAL_CAMERA_FEEDS_UPDATED:String = "camera_feeds_updated";
 	@:keep public static var FEED_RGBA_IMAGE:Int = 0;
 	@:keep public static var FEED_YCBCR_IMAGE:Int = 0;

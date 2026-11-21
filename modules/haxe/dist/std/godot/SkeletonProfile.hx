@@ -131,6 +131,12 @@ class SkeletonProfile extends godot.Resource {
 	public function set_required(bone_idx:Int, required:Bool):Void {
 		Native.call(__hxgodotId, "set_required", [bone_idx, required]);
 	}
+
+	/** `profile_updated` signal. */
+	public var profile_updated(get, never):godot.Signal;
+	@:noCompletion function get_profile_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "profile_updated");
+	}
 	@:keep public static inline var SIGNAL_PROFILE_UPDATED:String = "profile_updated";
 	@:keep public static var TAIL_DIRECTION_AVERAGE_CHILDREN:Int = 0;
 	@:keep public static var TAIL_DIRECTION_SPECIFIC_CHILD:Int = 1;

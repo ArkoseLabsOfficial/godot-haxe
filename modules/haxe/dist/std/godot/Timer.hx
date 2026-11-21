@@ -106,6 +106,12 @@ class Timer extends godot.Node {
 	public function get_timer_process_callback():Int {
 		return cast Native.call(__hxgodotId, "get_timer_process_callback", []);
 	}
+
+	/** `timeout` signal. */
+	public var timeout(get, never):godot.Signal;
+	@:noCompletion function get_timeout():godot.Signal {
+		return godot.Signal.fromObject(this, "timeout");
+	}
 	@:keep public static inline var SIGNAL_TIMEOUT:String = "timeout";
 	@:keep public static var TIMER_PROCESS_PHYSICS:Int = 0;
 	@:keep public static var TIMER_PROCESS_IDLE:Int = 1;

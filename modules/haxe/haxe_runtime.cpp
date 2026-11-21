@@ -35,12 +35,18 @@
 #include "core/config/engine.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/io/image.h"
 #include "core/math/math_funcs.h"
 #include "core/object/class_db.h"
 #include "core/object/object.h"
+#include "core/object/script_language.h"
 #include "core/os/os.h"
 #include "core/variant/callable.h"
 #include "core/version.h"
+#include "scene/resources/image_texture.h"
+#include "servers/audio/effects/audio_stream_generator.h"
+
+#include <cstring>
 
 #ifdef WINDOWS_ENABLED
 #include <windows.h>
@@ -439,6 +445,8 @@ HxHostApi HaxeRuntime::make_host_api() {
 	api.variant_call_mutating = &HaxeRuntime::host_variant_call_mutating;
 	api.value_equal = &HaxeRuntime::host_value_equal;
 	api.value_compare = &HaxeRuntime::host_value_compare;
+	api.update_texture = &HaxeRuntime::host_update_texture;
+	api.push_audio_frames = &HaxeRuntime::host_push_audio_frames;
 	return api;
 }
 
@@ -540,7 +548,20 @@ int HaxeRuntime::host_get_property(int64_t p_object, const char *p_name, HxValue
 		}
 	}
 	if (!found) {
-		return 1;
+		// A script can answer a name that is not in the property list through
+		// its `_get` override: a GDScript `const` or `static var` lives only in
+		// the script's own tables. Ask it directly; `r_valid` reports whether
+		// the name was understood, so an unknown name is still a miss.
+		bool valid = false;
+		Variant value = object->get(name, &valid);
+		if (!valid) {
+			return 1;
+		}
+		if (r_ret != nullptr) {
+			HxValueHolder &holder = holder_for(value);
+			*r_ret = holder.value;
+		}
+		return 0;
 	}
 	Variant value = object->get(name);
 	if (r_ret != nullptr) {
@@ -736,7 +757,36 @@ int HaxeRuntime::host_utility(const char *p_op, int64_t p_object, const char *p_
 		if (r_ret == nullptr || p_text == nullptr) {
 			return 2;
 		}
-		HxValueHolder &holder = holder_for(ClassDB::get_parent_class(StringName(String::utf8(p_text))).operator String());
+		StringName name = StringName(String::utf8(p_text));
+		String parent;
+		if (ClassDB::class_exists(name)) {
+			parent = ClassDB::get_parent_class(name);
+		} else if (ScriptServer::is_global_class(name)) {
+			// A GDScript class name: its Haxe stub extends the binding of the
+			// engine class the script ultimately derives from.
+			parent = ScriptServer::get_global_class_native_base(name);
+		}
+		HxValueHolder &holder = holder_for(parent);
+		*r_ret = holder.value;
+		return 0;
+	}
+	if (op == "script_class_name") {
+		// The `class_name` of the script attached to an object, or an empty
+		// string. The glue wraps a scripted object as its GDScript stub class
+		// (instead of the native engine class) so `get_node("x", MyClass)` and
+		// a returned instance are typed as `MyClass`.
+		if (r_ret == nullptr) {
+			return 2;
+		}
+		String name;
+		Object *object = resolve_object(p_object);
+		if (object != nullptr) {
+			Ref<Script> script = object->get_script();
+			if (script.is_valid()) {
+				name = script->get_global_name();
+			}
+		}
+		HxValueHolder &holder = holder_for(name);
 		*r_ret = holder.value;
 		return 0;
 	}
@@ -904,7 +954,11 @@ int HaxeRuntime::host_has_property(int64_t p_object, const char *p_name) {
 			return 1;
 		}
 	}
-	return 0;
+	// A script `_get` can answer names outside the property list (a GDScript
+	// `const` or `static var`); mirror `host_get_property` so the two agree.
+	bool valid = false;
+	object->get(name, &valid);
+	return valid ? 1 : 0;
 }
 
 int HaxeRuntime::host_variant_call_mutating(const HxValue *p_target, const char *p_method, const HxValue *p_args, int p_argc, HxValue *r_ret, HxValue *r_updated) {
@@ -983,6 +1037,59 @@ int HaxeRuntime::host_value_compare(const HxValue *p_a, const HxValue *p_b, int 
 	}
 	*r_compare = 0;
 	return 0;
+}
+
+int HaxeRuntime::host_update_texture(int64_t p_texture, const void *p_pixels, int64_t p_size, int p_width, int p_height, int p_format) {
+	if (p_pixels == nullptr || p_width <= 0 || p_height <= 0) {
+		return 2;
+	}
+	if (p_format < 0 || p_format >= Image::FORMAT_MAX) {
+		return 2;
+	}
+	ImageTexture *texture = Object::cast_to<ImageTexture>(resolve_object(p_texture));
+	if (texture == nullptr) {
+		return 1;
+	}
+	const Image::Format format = (Image::Format)p_format;
+	const int64_t expected = Image::get_image_data_size(p_width, p_height, format, false);
+	if (expected <= 0 || p_size < expected) {
+		return 2;
+	}
+	// One native copy into the engine's array; the caller's buffer is only
+	// guaranteed for the duration of this call.
+	PackedByteArray data;
+	data.resize(expected);
+	memcpy(data.ptrw(), p_pixels, (size_t)expected);
+	Ref<Image> image = Image::create_from_data(p_width, p_height, false, format, data);
+	if (image.is_null()) {
+		return 2;
+	}
+	texture->update(image);
+	return 0;
+}
+
+int HaxeRuntime::host_push_audio_frames(int64_t p_playback, const void *p_samples, int p_frames, int p_channels) {
+	AudioStreamGeneratorPlayback *playback = Object::cast_to<AudioStreamGeneratorPlayback>(resolve_object(p_playback));
+	if (playback == nullptr) {
+		return -1;
+	}
+	if (p_samples == nullptr || p_frames <= 0 || p_channels <= 0) {
+		return -2;
+	}
+	const int16_t *samples = static_cast<const int16_t *>(p_samples);
+	PackedVector2Array frames;
+	frames.resize(p_frames);
+	for (int i = 0; i < p_frames; i++) {
+		// Interleaved signed 16 bit, normalised to [-1, 1]; a mono source is
+		// duplicated into both channels.
+		const int16_t left = samples[i * p_channels];
+		const int16_t right = p_channels > 1 ? samples[i * p_channels + 1] : left;
+		frames.write[i] = Vector2(left / 32768.0f, right / 32768.0f);
+	}
+	if (!playback->push_buffer(frames)) {
+		return -1;
+	}
+	return p_frames;
 }
 
 /* ---- Library ----------------------------------------------------------- */

@@ -735,21 +735,117 @@ class Window extends godot.Viewport {
 		var __minsize:godot.Vector2i = minsize == null ? new godot.Vector2i(0, 0) : minsize;
 		Native.call(__hxgodotId, "popup_exclusive_centered_clamped", [from_node, __minsize, fallback_ratio]);
 	}
+
+	/** `window_input` signal. */
+	public var window_input(get, never):godot.Signal;
+	@:noCompletion function get_window_input():godot.Signal {
+		return godot.Signal.fromObject(this, "window_input");
+	}
 	@:keep public static inline var SIGNAL_WINDOW_INPUT:String = "window_input";
+
+	/** `nonclient_window_input` signal. */
+	public var nonclient_window_input(get, never):godot.Signal;
+	@:noCompletion function get_nonclient_window_input():godot.Signal {
+		return godot.Signal.fromObject(this, "nonclient_window_input");
+	}
 	@:keep public static inline var SIGNAL_NONCLIENT_WINDOW_INPUT:String = "nonclient_window_input";
+
+	/** `files_dropped` signal. */
+	public var files_dropped(get, never):godot.Signal;
+	@:noCompletion function get_files_dropped():godot.Signal {
+		return godot.Signal.fromObject(this, "files_dropped");
+	}
 	@:keep public static inline var SIGNAL_FILES_DROPPED:String = "files_dropped";
+
+	/** `mouse_entered` signal. */
+	public var mouse_entered(get, never):godot.Signal;
+	@:noCompletion function get_mouse_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_entered");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_ENTERED:String = "mouse_entered";
+
+	/** `mouse_exited` signal. */
+	public var mouse_exited(get, never):godot.Signal;
+	@:noCompletion function get_mouse_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "mouse_exited");
+	}
 	@:keep public static inline var SIGNAL_MOUSE_EXITED:String = "mouse_exited";
+
+	/** `focus_entered` signal. */
+	public var focus_entered(get, never):godot.Signal;
+	@:noCompletion function get_focus_entered():godot.Signal {
+		return godot.Signal.fromObject(this, "focus_entered");
+	}
 	@:keep public static inline var SIGNAL_FOCUS_ENTERED:String = "focus_entered";
+
+	/** `focus_exited` signal. */
+	public var focus_exited(get, never):godot.Signal;
+	@:noCompletion function get_focus_exited():godot.Signal {
+		return godot.Signal.fromObject(this, "focus_exited");
+	}
 	@:keep public static inline var SIGNAL_FOCUS_EXITED:String = "focus_exited";
+
+	/** `close_requested` signal. */
+	public var close_requested(get, never):godot.Signal;
+	@:noCompletion function get_close_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "close_requested");
+	}
 	@:keep public static inline var SIGNAL_CLOSE_REQUESTED:String = "close_requested";
+
+	/** `go_back_requested` signal. */
+	public var go_back_requested(get, never):godot.Signal;
+	@:noCompletion function get_go_back_requested():godot.Signal {
+		return godot.Signal.fromObject(this, "go_back_requested");
+	}
 	@:keep public static inline var SIGNAL_GO_BACK_REQUESTED:String = "go_back_requested";
+
+	/** `visibility_changed` signal. */
+	public var visibility_changed(get, never):godot.Signal;
+	@:noCompletion function get_visibility_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "visibility_changed");
+	}
 	@:keep public static inline var SIGNAL_VISIBILITY_CHANGED:String = "visibility_changed";
+
+	/** `about_to_popup` signal. */
+	public var about_to_popup(get, never):godot.Signal;
+	@:noCompletion function get_about_to_popup():godot.Signal {
+		return godot.Signal.fromObject(this, "about_to_popup");
+	}
 	@:keep public static inline var SIGNAL_ABOUT_TO_POPUP:String = "about_to_popup";
+
+	/** `theme_changed` signal. */
+	public var theme_changed(get, never):godot.Signal;
+	@:noCompletion function get_theme_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "theme_changed");
+	}
 	@:keep public static inline var SIGNAL_THEME_CHANGED:String = "theme_changed";
+
+	/** `dpi_changed` signal. */
+	public var dpi_changed(get, never):godot.Signal;
+	@:noCompletion function get_dpi_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "dpi_changed");
+	}
 	@:keep public static inline var SIGNAL_DPI_CHANGED:String = "dpi_changed";
+
+	/** `titlebar_changed` signal. */
+	public var titlebar_changed(get, never):godot.Signal;
+	@:noCompletion function get_titlebar_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "titlebar_changed");
+	}
 	@:keep public static inline var SIGNAL_TITLEBAR_CHANGED:String = "titlebar_changed";
+
+	/** `title_changed` signal. */
+	public var title_changed(get, never):godot.Signal;
+	@:noCompletion function get_title_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "title_changed");
+	}
 	@:keep public static inline var SIGNAL_TITLE_CHANGED:String = "title_changed";
+
+	/** `output_max_linear_value_changed` signal. */
+	public var output_max_linear_value_changed(get, never):godot.Signal;
+	@:noCompletion function get_output_max_linear_value_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "output_max_linear_value_changed");
+	}
 	@:keep public static inline var SIGNAL_OUTPUT_MAX_LINEAR_VALUE_CHANGED:String = "output_max_linear_value_changed";
 	@:keep public static var MODE_WINDOWED:Int = 0;
 	@:keep public static var MODE_MINIMIZED:Int = 1;

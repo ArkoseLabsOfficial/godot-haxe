@@ -125,9 +125,33 @@ class AnimationNode extends godot.Resource {
 	public function get_parameter(name:String):Dynamic {
 		return cast Native.call(__hxgodotId, "get_parameter", [name]);
 	}
+
+	/** `tree_changed` signal. */
+	public var tree_changed(get, never):godot.Signal;
+	@:noCompletion function get_tree_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "tree_changed");
+	}
 	@:keep public static inline var SIGNAL_TREE_CHANGED:String = "tree_changed";
+
+	/** `node_updated` signal. */
+	public var node_updated(get, never):godot.Signal;
+	@:noCompletion function get_node_updated():godot.Signal {
+		return godot.Signal.fromObject(this, "node_updated");
+	}
 	@:keep public static inline var SIGNAL_NODE_UPDATED:String = "node_updated";
+
+	/** `animation_node_renamed` signal. */
+	public var animation_node_renamed(get, never):godot.Signal;
+	@:noCompletion function get_animation_node_renamed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_node_renamed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_NODE_RENAMED:String = "animation_node_renamed";
+
+	/** `animation_node_removed` signal. */
+	public var animation_node_removed(get, never):godot.Signal;
+	@:noCompletion function get_animation_node_removed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_node_removed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_NODE_REMOVED:String = "animation_node_removed";
 	@:keep public static var FILTER_IGNORE:Int = 0;
 	@:keep public static var FILTER_PASS:Int = 1;

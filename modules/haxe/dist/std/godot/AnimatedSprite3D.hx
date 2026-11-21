@@ -93,9 +93,39 @@ class AnimatedSprite3D extends godot.SpriteBase3D {
 	public function get_playing_speed():Float {
 		return cast Native.call(__hxgodotId, "get_playing_speed", []);
 	}
+
+	/** `sprite_frames_changed` signal. */
+	public var sprite_frames_changed(get, never):godot.Signal;
+	@:noCompletion function get_sprite_frames_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "sprite_frames_changed");
+	}
 	@:keep public static inline var SIGNAL_SPRITE_FRAMES_CHANGED:String = "sprite_frames_changed";
+
+	/** `animation_changed` signal. */
+	public var animation_changed(get, never):godot.Signal;
+	@:noCompletion function get_animation_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_changed");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_CHANGED:String = "animation_changed";
+
+	/** `frame_changed` signal. */
+	public var frame_changed(get, never):godot.Signal;
+	@:noCompletion function get_frame_changed():godot.Signal {
+		return godot.Signal.fromObject(this, "frame_changed");
+	}
 	@:keep public static inline var SIGNAL_FRAME_CHANGED:String = "frame_changed";
+
+	/** `animation_looped` signal. */
+	public var animation_looped(get, never):godot.Signal;
+	@:noCompletion function get_animation_looped():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_looped");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_LOOPED:String = "animation_looped";
+
+	/** `animation_finished` signal. */
+	public var animation_finished(get, never):godot.Signal;
+	@:noCompletion function get_animation_finished():godot.Signal {
+		return godot.Signal.fromObject(this, "animation_finished");
+	}
 	@:keep public static inline var SIGNAL_ANIMATION_FINISHED:String = "animation_finished";
 }
