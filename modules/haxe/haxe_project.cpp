@@ -53,6 +53,7 @@ const char *HaxeProject::SETTING_HAXE_EXECUTABLE = "haxe/toolchain/haxe_executab
 const char *HaxeProject::SETTING_HAXELIB_EXECUTABLE = "haxe/toolchain/haxelib_executable";
 const char *HaxeProject::SETTING_DEFINES = "haxe/compiler/defines";
 const char *HaxeProject::SETTING_EXTRA_ARGS = "haxe/compiler/extra_arguments";
+const char *HaxeProject::SETTING_DCE = "haxe/compiler/dce";
 const char *HaxeProject::SETTING_ALLOW_GLOBAL_HAXELIB = "haxe/haxelib/allow_global";
 const char *HaxeProject::SETTING_BUILD_ON_RUN = "haxe/build/build_on_run";
 const char *HaxeProject::SETTING_DEBUG_SYMBOLS = "haxe/build/debug_symbols";
@@ -235,6 +236,9 @@ void HaxeProject::register_project_settings() {
 	if (!settings->has_setting(SETTING_EXTRA_ARGS)) {
 		settings->set(SETTING_EXTRA_ARGS, PackedStringArray());
 	}
+	if (!settings->has_setting(SETTING_DCE)) {
+		settings->set(SETTING_DCE, "full");
+	}
 	if (!settings->has_setting(SETTING_ALLOW_GLOBAL_HAXELIB)) {
 		settings->set(SETTING_ALLOW_GLOBAL_HAXELIB, false);
 	}
@@ -248,7 +252,7 @@ void HaxeProject::register_project_settings() {
 	// Ensure the settings are visible with their defaults, matching how the
 	// C# module exposes its build configuration.
 	for (const char *name : { SETTING_SOURCE_DIR, SETTING_HAXELIB_DIR, SETTING_BUILD_DIR,
-				 SETTING_HAXE_EXECUTABLE, SETTING_HAXELIB_EXECUTABLE, SETTING_DEFINES, SETTING_EXTRA_ARGS,
+				 SETTING_HAXE_EXECUTABLE, SETTING_HAXELIB_EXECUTABLE, SETTING_DEFINES, SETTING_EXTRA_ARGS, SETTING_DCE,
 				 SETTING_ALLOW_GLOBAL_HAXELIB, SETTING_BUILD_ON_RUN, SETTING_DEBUG_SYMBOLS }) {
 		settings->set_initial_value(name, settings->get(name));
 		// The module reads these on every build and does not tolerate their
@@ -563,6 +567,17 @@ Vector<String> HaxeProject::get_extra_args() {
 		}
 	}
 	return result;
+}
+
+String HaxeProject::get_dce() {
+	String dce = String(GLOBAL_GET(SETTING_DCE)).strip_edges().to_lower();
+	// The compiler accepts exactly these three; anything else (an empty
+	// setting, a typo) falls back to the default rather than being passed
+	// through and failing every build with an obscure message.
+	if (dce == "full" || dce == "std" || dce == "no") {
+		return dce;
+	}
+	return "full";
 }
 
 bool HaxeProject::allows_global_haxelib() {
@@ -1204,6 +1219,23 @@ String HaxeProject::serialize_script_metadata() {
 		entry["path"] = key;
 		scripts_dict[key] = entry;
 	}
+	// A library class that can be attached like a project script (a
+	// `@:globalClass` reaching a Godot type) is shipped as an empty `.hx` stub
+	// as well, but it never appears in `scan_sources()`: the project
+	// `haxelib/` directory is `.gdignore`d, so it is not part of the export
+	// file list either. Its description has to be in the manifest, keyed by the
+	// same localized path a saved scene references, or a game cannot resolve
+	// the stub the exporter wrote for it.
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	for (const LibraryGlobalClass &library : get_library_global_classes()) {
+		HaxeClassInfo info;
+		if (!libraries->get_type_info(library.fq_name, info) || !info.valid) {
+			continue;
+		}
+		Dictionary description = class_info_to_dict(info);
+		description["path"] = library.path;
+		scripts_dict[library.path] = description;
+	}
 	document["scripts"] = scripts_dict;
 	return JSON::stringify(document);
 }
@@ -1342,9 +1374,11 @@ Vector<HaxeProject::LibraryGlobalClass> HaxeProject::get_library_global_classes(
 		}
 		LibraryGlobalClass entry;
 		entry.name = info.name.is_empty() ? type_name : info.name;
+		entry.fq_name = type_name;
 		entry.path = settings != nullptr ? settings->localize_path(info.path) : info.path;
 		entry.native_base = native_base;
 		entry.is_tool = info.is_tool;
+		entry.is_abstract = info.is_abstract;
 		classes.push_back(entry);
 	}
 	return classes;

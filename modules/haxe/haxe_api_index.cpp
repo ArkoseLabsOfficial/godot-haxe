@@ -186,6 +186,10 @@ Array HaxeApiIndex::get_declared_members(const String &p_name) {
 			member["static"] = method.size() > 3 ? method[3] : Variant();
 			member["virtual"] = method.size() > 4 ? method[4] : Variant();
 			member["vararg"] = method.size() > 5 ? method[5] : Variant();
+			/* The parameter names of the generated method, used by call
+			 * hints. Older metadata without them yields an empty list, and a
+			 * consumer must fall back to the type. */
+			member["arg_names"] = method.size() > 6 ? method[6] : Variant(Array());
 			member["kind"] = (member["static"].operator bool()) ? "static_method" : "method";
 			member["owner"] = p_name;
 			result.push_back(member);
@@ -223,6 +227,7 @@ Array HaxeApiIndex::get_declared_members(const String &p_name) {
 		instance_member["static"] = true;
 		instance_member["type"] = p_name;
 		instance_member["args"] = Array();
+		instance_member["arg_names"] = Array();
 		instance_member["owner"] = p_name;
 		result.push_back(instance_member);
 

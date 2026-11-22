@@ -34,3 +34,15 @@
  * module and every project library are compiled against the exact same
  * contract. See modules/haxe/dist/toolchain/hxgodot_abi.h. */
 #include "dist/toolchain/hxgodot_abi.h"
+
+/* A byte string an exported game's engine binary carries, naming the host API
+ * version it was built for. The export plugin cannot read a template's symbols,
+ * so the version is searched for as text: a template built from another engine
+ * revision cannot load a library this editor compiled, and the export is
+ * refused instead of shipping a game that starts with "incompatible host API
+ * version". The trailing `;` keeps `...=1;` from matching `...=12;`.
+ * `register_types.cpp` passes the marker to `print_verbose()`, which is what
+ * keeps it in the binary. */
+#define HXGODOT_STRINGIFY_DETAIL(value) #value
+#define HXGODOT_STRINGIFY(value) HXGODOT_STRINGIFY_DETAIL(value)
+#define HXGODOT_TEMPLATE_ABI_MARKER "hxgodot-abi=" HXGODOT_STRINGIFY(HXGODOT_ABI_VERSION) ";"

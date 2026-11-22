@@ -43,6 +43,7 @@
 #include "core/os/os.h"
 #include "core/variant/callable.h"
 #include "core/version.h"
+#include "scene/audio/audio_stream_player.h"
 #include "scene/resources/image_texture.h"
 #include "servers/audio/effects/audio_stream_generator.h"
 
@@ -416,6 +417,14 @@ void HaxeRuntime::unload_all() {
 	pinned_objects.clear();
 	pinned_refs.clear();
 	callable_handles.clear();
+	{
+		MutexLock lock(file_handles_mutex);
+		file_handles.clear();
+	}
+	{
+		MutexLock lock(audio_handles_mutex);
+		audio_handles.clear();
+	}
 }
 
 HxHostApi HaxeRuntime::make_host_api() {
@@ -447,6 +456,18 @@ HxHostApi HaxeRuntime::make_host_api() {
 	api.value_compare = &HaxeRuntime::host_value_compare;
 	api.update_texture = &HaxeRuntime::host_update_texture;
 	api.push_audio_frames = &HaxeRuntime::host_push_audio_frames;
+	api.file_open = &HaxeRuntime::host_file_open;
+	api.file_size = &HaxeRuntime::host_file_size;
+	api.file_read = &HaxeRuntime::host_file_read;
+	api.file_seek = &HaxeRuntime::host_file_seek;
+	api.file_close = &HaxeRuntime::host_file_close;
+	api.audio_stream_open = &HaxeRuntime::host_audio_stream_open;
+	api.audio_stream_attach = &HaxeRuntime::host_audio_stream_attach;
+	api.audio_stream_write = &HaxeRuntime::host_audio_stream_write;
+	api.audio_stream_buffered = &HaxeRuntime::host_audio_stream_buffered;
+	api.audio_stream_reset = &HaxeRuntime::host_audio_stream_reset;
+	api.audio_stream_stat = &HaxeRuntime::host_audio_stream_stat;
+	api.audio_stream_close = &HaxeRuntime::host_audio_stream_close;
 	return api;
 }
 
@@ -1056,9 +1077,17 @@ int HaxeRuntime::host_update_texture(int64_t p_texture, const void *p_pixels, in
 		return 2;
 	}
 	// One native copy into the engine's array; the caller's buffer is only
-	// guaranteed for the duration of this call.
-	PackedByteArray data;
-	data.resize(expected);
+	// guaranteed for the duration of this call. The array itself is reused
+	// across frames: `Image::create_from_data` shares it rather than copying,
+	// so once the temporary `Image` is gone the buffer is private again and the
+	// next frame overwrites the same allocation instead of allocating (and
+	// freeing) a frame-sized buffer every time.
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->texture_upload_mutex);
+	PackedByteArray &data = runtime->texture_upload_buffer;
+	if (data.size() != (int)expected) {
+		data.resize(expected);
+	}
 	memcpy(data.ptrw(), p_pixels, (size_t)expected);
 	Ref<Image> image = Image::create_from_data(p_width, p_height, false, format, data);
 	if (image.is_null()) {
@@ -1092,6 +1121,180 @@ int HaxeRuntime::host_push_audio_frames(int64_t p_playback, const void *p_sample
 	return p_frames;
 }
 
+Ref<FileAccess> HaxeRuntime::get_file_handle(int64_t p_handle) {
+	if (p_handle <= 0) {
+		return Ref<FileAccess>();
+	}
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->file_handles_mutex);
+	HashMap<int64_t, Ref<FileAccess>>::Iterator it = runtime->file_handles.find(p_handle);
+	if (it == runtime->file_handles.end()) {
+		return Ref<FileAccess>();
+	}
+	return it->value;
+}
+
+int64_t HaxeRuntime::host_file_open(const char *p_path, int64_t *r_size) {
+	if (p_path == nullptr) {
+		return 0;
+	}
+	// `FileAccess::open` resolves res://, user:// and absolute paths, and reads
+	// packed entries straight out of the PCK/APK, so this covers exported games
+	// without the library knowing anything about the file system.
+	Ref<FileAccess> file = FileAccess::open(String::utf8(p_path), FileAccess::READ);
+	if (file.is_null()) {
+		return 0;
+	}
+	HaxeRuntime *runtime = get_singleton();
+	int64_t handle = 0;
+	{
+		MutexLock lock(runtime->file_handles_mutex);
+		// 0 always means "cannot open", so it is never handed out.
+		if (runtime->next_file_handle <= 0) {
+			runtime->next_file_handle = 1;
+		}
+		handle = runtime->next_file_handle++;
+		runtime->file_handles[handle] = file;
+	}
+	if (r_size != nullptr) {
+		*r_size = (int64_t)file->get_length();
+	}
+	return handle;
+}
+
+int64_t HaxeRuntime::host_file_size(int64_t p_handle) {
+	Ref<FileAccess> file = get_file_handle(p_handle);
+	if (file.is_null()) {
+		return -1;
+	}
+	return (int64_t)file->get_length();
+}
+
+int64_t HaxeRuntime::host_file_read(int64_t p_handle, void *r_out, int64_t p_size) {
+	if (r_out == nullptr || p_size <= 0) {
+		return -1;
+	}
+	Ref<FileAccess> file = get_file_handle(p_handle);
+	if (file.is_null()) {
+		return -1;
+	}
+	// Reads straight into the caller's buffer, so a streaming decoder never
+	// needs a copy of the file beyond the chunk it asked for.
+	return (int64_t)file->get_buffer((uint8_t *)r_out, (uint64_t)p_size);
+}
+
+int64_t HaxeRuntime::host_file_seek(int64_t p_handle, int64_t p_position) {
+	if (p_position < 0) {
+		return -1;
+	}
+	Ref<FileAccess> file = get_file_handle(p_handle);
+	if (file.is_null()) {
+		return -1;
+	}
+	file->seek((uint64_t)p_position);
+	return (int64_t)file->get_position() == p_position ? 0 : -1;
+}
+
+void HaxeRuntime::host_file_close(int64_t p_handle) {
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->file_handles_mutex);
+	runtime->file_handles.erase(p_handle);
+}
+
+Ref<HaxeAudioStream> HaxeRuntime::get_audio_handle(int64_t p_handle) {
+	if (p_handle <= 0) {
+		return Ref<HaxeAudioStream>();
+	}
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->audio_handles_mutex);
+	HashMap<int64_t, Ref<HaxeAudioStream>>::Iterator it = runtime->audio_handles.find(p_handle);
+	if (it == runtime->audio_handles.end()) {
+		return Ref<HaxeAudioStream>();
+	}
+	return it->value;
+}
+
+int64_t HaxeRuntime::host_audio_stream_open(double p_mix_rate, double p_buffer_len, double p_target_len) {
+	Ref<HaxeAudioStream> stream;
+	stream.instantiate();
+	// Configure before the handle is published, so a producer that starts
+	// writing as soon as it has the handle never sees a half sized ring.
+	stream->configure(p_mix_rate, p_buffer_len, p_target_len);
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->audio_handles_mutex);
+	// 0 always means "invalid", so it is never handed out.
+	if (runtime->next_audio_handle <= 0) {
+		runtime->next_audio_handle = 1;
+	}
+	const int64_t handle = runtime->next_audio_handle++;
+	runtime->audio_handles[handle] = stream;
+	return handle;
+}
+
+int HaxeRuntime::host_audio_stream_attach(int64_t p_handle, int64_t p_player) {
+	Ref<HaxeAudioStream> stream = get_audio_handle(p_handle);
+	if (stream.is_null()) {
+		return 1;
+	}
+	AudioStreamPlayer *player = Object::cast_to<AudioStreamPlayer>(resolve_object(p_player));
+	if (player == nullptr) {
+		return 2;
+	}
+	// `set_stream` is a scene property, so the caller makes sure this runs on
+	// the main thread (the player is played from there too).
+	player->set_stream(stream);
+	return 0;
+}
+
+int HaxeRuntime::host_audio_stream_write(int64_t p_handle, const void *p_samples, int p_frames, int p_channels) {
+	if (p_samples == nullptr || p_frames <= 0 || p_channels <= 0) {
+		return -2;
+	}
+	Ref<HaxeAudioStream> stream = get_audio_handle(p_handle);
+	if (stream.is_null()) {
+		return -1;
+	}
+	return stream->write_frames(static_cast<const int16_t *>(p_samples), p_frames, p_channels);
+}
+
+int64_t HaxeRuntime::host_audio_stream_buffered(int64_t p_handle) {
+	Ref<HaxeAudioStream> stream = get_audio_handle(p_handle);
+	if (stream.is_null()) {
+		return -1;
+	}
+	return stream->buffered_frames();
+}
+
+void HaxeRuntime::host_audio_stream_reset(int64_t p_handle) {
+	Ref<HaxeAudioStream> stream = get_audio_handle(p_handle);
+	if (!stream.is_null()) {
+		stream->reset_queue();
+	}
+}
+
+int64_t HaxeRuntime::host_audio_stream_stat(int64_t p_handle, int p_which) {
+	Ref<HaxeAudioStream> stream = get_audio_handle(p_handle);
+	if (stream.is_null()) {
+		return -1;
+	}
+	switch (p_which) {
+		case 0:
+			return (int64_t)stream->get_dropped_frames();
+		case 1:
+			return (int64_t)stream->get_underrun_count();
+		case 2:
+			return (int64_t)stream->get_trimmed_frames();
+		default:
+			return -1;
+	}
+}
+
+void HaxeRuntime::host_audio_stream_close(int64_t p_handle) {
+	HaxeRuntime *runtime = get_singleton();
+	MutexLock lock(runtime->audio_handles_mutex);
+	runtime->audio_handles.erase(p_handle);
+}
+
 /* ---- Library ----------------------------------------------------------- */
 
 HaxeLibrary::~HaxeLibrary() {
@@ -1108,6 +1311,19 @@ void HaxeLibrary::release_reference() {
 void HaxeLibrary::capture_error() {
 	last_error = String::utf8(fn_last_error ? fn_last_error() : "");
 	last_stack_trace = String::utf8(fn_stack_trace ? fn_stack_trace() : "");
+}
+
+/* The `abi=<n>` line of the string `hxgodot_library_info()` returns. Reading it
+ * turns a bare "incompatible host API version" into a message that names both
+ * versions, so a stale library or a mismatched export template is obvious.
+ * Empty for a library built before the field existed. */
+String HaxeRuntime::library_abi_from_info(const String &p_info) {
+	for (const String &line : p_info.split("\n")) {
+		if (line.begins_with("abi=")) {
+			return line.substr(4).strip_edges();
+		}
+	}
+	return String();
 }
 
 HaxeLibrary *HaxeLibrary::load(const String &p_path, String &r_error) {
@@ -1193,7 +1409,19 @@ HaxeLibrary *HaxeLibrary::load(const String &p_path, String &r_error) {
 	ActiveLibraryScope scope(library);
 	if (library->fn_install(&api) != 0 || library->fn_start() != 0) {
 		library->capture_error();
-		r_error = vformat("Haxe library '%s' failed to initialize: %s", p_path, library->last_error);
+		// A failed install is usually a host API version mismatch. The engine
+		// only knows its own version, so the library's — which it reports from
+		// `hxgodot_library_info()` — is read back and named as well: the two
+		// together point at a stale library or an export template that was built
+		// from a different engine.
+		String detail;
+		if (library->fn_library_info != nullptr) {
+			const String library_abi = HaxeRuntime::library_abi_from_info(String::utf8(library->fn_library_info()));
+			if (!library_abi.is_empty()) {
+				detail = vformat(" (the library was built for host API %s, this engine provides %d; rebuild the project and reinstall the export templates built from this engine)", library_abi, (int)HXGODOT_ABI_VERSION);
+			}
+		}
+		r_error = vformat("Haxe library '%s' failed to initialize: %s%s", p_path, library->last_error, detail);
 		memdelete(library);
 		return nullptr;
 	}

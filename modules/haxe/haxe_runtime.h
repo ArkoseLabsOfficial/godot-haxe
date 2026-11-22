@@ -31,14 +31,18 @@
 #pragma once
 
 #include "haxe_abi.h"
+#include "haxe_audio_stream.h"
 #include "haxe_value.h"
 
+#include "core/io/file_access.h"
 #include "core/object/object.h"
 #include "core/os/thread_safe.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
 #include "core/templates/rid.h"
+#include "core/templates/vector.h"
 #include "core/variant/callable.h"
+#include "core/variant/variant.h"
 
 class HaxeCallable;
 
@@ -137,6 +141,12 @@ public:
 	/* True when a library file can be loaded by this engine build. */
 	static bool is_library_abi_compatible(const String &p_path, String &r_error);
 
+	/* The host API version named by the string `hxgodot_library_info()` returns
+	 * (`abi=<n>`), or an empty string when it carries none. Used to report both
+	 * versions when a library cannot be installed. Public so a test can check the
+	 * parse. */
+	static String library_abi_from_info(const String &p_info);
+
 	/* Directory that holds the Haxe facing support code shipped with the
 	 * engine (bindings, runtime classes, build helpers). */
 	String get_stdlib_dir() const;
@@ -179,6 +189,19 @@ public:
 	static int host_value_compare(const HxValue *p_a, const HxValue *p_b, int *r_compare);
 	static int host_update_texture(int64_t p_texture, const void *p_pixels, int64_t p_size, int p_width, int p_height, int p_format);
 	static int host_push_audio_frames(int64_t p_playback, const void *p_samples, int p_frames, int p_channels);
+	static int64_t host_file_open(const char *p_path, int64_t *r_size);
+	static int64_t host_file_size(int64_t p_handle);
+	static int64_t host_file_read(int64_t p_handle, void *r_out, int64_t p_size);
+	static int64_t host_file_seek(int64_t p_handle, int64_t p_position);
+	static void host_file_close(int64_t p_handle);
+
+	static int64_t host_audio_stream_open(double p_mix_rate, double p_buffer_len, double p_target_len);
+	static int host_audio_stream_attach(int64_t p_handle, int64_t p_player);
+	static int host_audio_stream_write(int64_t p_handle, const void *p_samples, int p_frames, int p_channels);
+	static int64_t host_audio_stream_buffered(int64_t p_handle);
+	static void host_audio_stream_reset(int64_t p_handle);
+	static int64_t host_audio_stream_stat(int64_t p_handle, int p_which);
+	static void host_audio_stream_close(int64_t p_handle);
 
 	/* Library whose code is currently running on this thread. Values that only
 	 * make sense in the context of a library (Haxe closures, for example)
@@ -213,6 +236,45 @@ private:
 	HashMap<uint64_t, Ref<RefCounted>> pinned_refs;
 	HashMap<int64_t, Callable> callable_handles;
 	int64_t next_callable_handle = 1;
+
+	/* Files handed to a project library through the host API's `file_*`
+	 * functions. Each entry is a Ref so the FileAccess stays alive while the
+	 * library streams from it, on whatever thread VLC reads on. The mutex only
+	 * guards the table (lookup, insert, erase); the actual reads happen on the
+	 * Ref a caller copied out, so a slow read never blocks another lookup. */
+	HashMap<int64_t, Ref<FileAccess>> file_handles;
+	int64_t next_file_handle = 1;
+	Mutex file_handles_mutex;
+
+	/* Copies a handle out of the table, or a null Ref when it is unknown. */
+	static Ref<FileAccess> get_file_handle(int64_t p_handle);
+
+	/* Streaming audio handed to a project library through the host API's
+	 * `audio_stream_*` functions. Each entry is a Ref so the stream stays
+	 * alive while a player holds it. Writes come from a decoder's audio
+	 * callback on its own thread, so the mutex only guards the table; the
+	 * write itself happens on the Ref a caller copied out. */
+	HashMap<int64_t, Ref<HaxeAudioStream>> audio_handles;
+	int64_t next_audio_handle = 1;
+	Mutex audio_handles_mutex;
+
+	/* Copies a handle out of the table, or a null Ref when it is unknown. */
+	static Ref<HaxeAudioStream> get_audio_handle(int64_t p_handle);
+
+	/* Staging buffer for `host_update_texture`.
+	 *
+	 * A media decoder uploads a whole frame every displayed frame. Allocating
+	 * and freeing a frame-sized `PackedByteArray` for each of those uploads is
+	 * pure churn, so the engine side copy of the frame is kept here and reused.
+	 * `Image::create_from_data` shares the array instead of copying it, so the
+	 * buffer is private again once the temporary `Image` is gone and the next
+	 * frame writes into the same allocation.
+	 *
+	 * Uploads happen from `_pump` on the main thread, one frame at a time, so a
+	 * single slot is enough; the mutex only serializes it in case a project
+	 * uploads from somewhere else too. */
+	PackedByteArray texture_upload_buffer;
+	Mutex texture_upload_mutex;
 
 	/* The support files (std, bindings, toolchain) are resolved on first use:
 	 * the embedded copies are only extracted when they are actually needed. */

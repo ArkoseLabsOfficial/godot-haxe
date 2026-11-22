@@ -80,6 +80,7 @@ std::unordered_map<int64_t, Instance> g_instances;
 
 struct ClosureEntry {
 	Dynamic fn;
+	hx::Object *root = nullptr; /* GC root, keeps the closure alive */
 	int refs = 0;
 };
 
@@ -283,6 +284,7 @@ struct Reader {
 std::unordered_map<std::string, hx::Class> g_class_cache;
 std::unordered_map<void *, int> g_kind_cache;
 std::unordered_map<void *, bool> g_object_class_cache;
+std::unordered_map<std::string, bool> g_value_binding_cache;
 
 hx::Class resolve_class(const char *p_name) {
 	std::string key(p_name);
@@ -536,6 +538,47 @@ void set_object(const Dynamic &p_object, const char *p_name, const Dynamic &p_va
 	p_object.mPtr->__SetField(String(p_name), hx::Val(p_value), HX_PROP_ALWAYS);
 }
 
+/* Whether a wrapper class declares the `Vector2`-style value binding that
+ * `make_builtin` has to clear after `ConstructEmpty`. The answer is a property
+ * of the class, so it is resolved once and cached next to the class. */
+bool class_has_value_binding(hx::Class p_class) {
+	const std::string key = std::string(p_class->mName.utf8_str());
+	{
+		std::lock_guard<std::mutex> lock(g_state_mutex);
+		std::unordered_map<std::string, bool>::iterator it = g_value_binding_cache.find(key);
+		if (it != g_value_binding_cache.end()) {
+			return it->second;
+		}
+	}
+	const String binding = String("__hxowner");
+	bool found = false;
+	for (hx::Class current = p_class; current.mPtr != nullptr;) {
+		Array<String> &members = current->mMembers;
+		if (members.mPtr != nullptr) {
+			for (int i = 0; i < members->size(); i++) {
+				if (members[i] == binding) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (found) {
+			break;
+		}
+		// A root class points at itself, so the walk has to notice the loop.
+		hx::Class parent = current->mSuper != nullptr ? *current->mSuper : hx::Class();
+		if (parent.mPtr == current.mPtr) {
+			break;
+		}
+		current = parent;
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_state_mutex);
+		g_value_binding_cache[key] = found;
+	}
+	return found;
+}
+
 Dynamic make_instance(const char *p_class) {
 	hx::Class cls = resolve_object_wrapper(p_class);
 	if (cls.mPtr == nullptr) {
@@ -554,10 +597,13 @@ Dynamic make_builtin(const char *p_class) {
 	// whatever the collector left in the memory block. That is fine for the
 	// fields the caller initializes right after, but the value binding is a
 	// pointer: a stale one would be followed on the first component write.
-	// Value types declare it as `__hxowner`/`__hxproperty`; asking for the
-	// fields on a class that has none is a no-op.
-	value.mPtr->__SetField(String("__hxowner"), null(), HX_PROP_DYNAMIC);
-	value.mPtr->__SetField(String("__hxproperty"), null(), HX_PROP_DYNAMIC);
+	// Only the value-type wrappers declare `__hxowner`/`__hxproperty`; a packed
+	// array, a `Dictionary` or a `RID` has no such member, and `__SetField`
+	// throws `Invalid field:` for one a class does not declare.
+	if (class_has_value_binding(cls)) {
+		value.mPtr->__SetField(String("__hxowner"), null(), HX_PROP_DYNAMIC);
+		value.mPtr->__SetField(String("__hxproperty"), null(), HX_PROP_DYNAMIC);
+	}
 	return value;
 }
 
@@ -578,6 +624,7 @@ void release_closure_now(int64_t p_id) {
 	}
 	it->second.refs--;
 	if (it->second.refs <= 0) {
+		hx::GCRemoveRoot(&it->second.root);
 		g_closures.erase(it);
 	}
 }
@@ -588,7 +635,17 @@ int64_t create_closure(Dynamic p_function, bool p_haxe_owned) {
 	ClosureEntry entry;
 	entry.fn = p_function;
 	entry.refs = p_haxe_owned ? 1 : 0;
-	g_closures[id] = entry;
+	/* A closure the engine holds (a `Callable` handed to a signal, a timer or a
+	 * deferred call) lives only in this C++ table: nothing on the Haxe side
+	 * references it, so without a GC root hxcpp would free it and the engine
+	 * would later call `__Run` on a dangling pointer. `Instance` is rooted the
+	 * same way. The root address lives inside the map entry and the collector
+	 * reads it on every collection, so it has to stay valid until
+	 * `GCRemoveRoot` (std::unordered_map keeps element addresses stable across
+	 * rehashes). */
+	ClosureEntry &record = g_closures[id] = entry;
+	record.root = p_function.mPtr;
+	hx::GCAddRoot(&record.root);
 	return id;
 }
 
@@ -1550,7 +1607,16 @@ Dynamic decode_container(Reader &p_reader, int p_kind) {
 	Array<Dynamic> data = Array_obj<Dynamic>::__new();
 	for (uint32_t i = 0; i < count; i++) {
 		switch (p_kind) {
-			case HXG_PACKED_BYTE_ARRAY:
+			case HXG_PACKED_BYTE_ARRAY: {
+				// A byte array travels one byte per element (the engine's
+				// `hx_value_encode_variant` writes it compactly, exactly like
+				// this side's `encode_container`), so reading a full `u64`
+				// here would desynchronise the whole stream and hand back
+				// shifted garbage.
+				uint8_t value = 0;
+				p_reader.read_u8(value);
+				data->push(Dynamic((int)value));
+			} break;
 			case HXG_PACKED_INT32_ARRAY:
 			case HXG_PACKED_INT64_ARRAY: {
 				uint64_t value = 0;
@@ -2546,6 +2612,100 @@ int hxgodot_haxe_push_audio_frames(String p_playback_id, const void *p_samples, 
 		return -1;
 	}
 	return g_host.push_audio_frames((int64_t)strtoll(p_playback_id.utf8_str(), nullptr, 10), p_samples, p_frames, p_channels);
+}
+
+/* Virtual file system. `file_open` returns a small handle (0 on failure) so it
+ * crosses into Haxe as an Int; the size and the positions are 64 bit and
+ * travel as Int64. `file_read` fills the caller's buffer directly, which is
+ * what keeps a streamed media out of Haxe memory. */
+int hxgodot_haxe_file_open(String p_path) {
+	if (g_host.file_open == nullptr || p_path == null()) {
+		return 0;
+	}
+	return (int)g_host.file_open(p_path.utf8_str(), nullptr);
+}
+
+int64_t hxgodot_haxe_file_size(int p_handle) {
+	if (g_host.file_size == nullptr) {
+		return -1;
+	}
+	return g_host.file_size((int64_t)p_handle);
+}
+
+int hxgodot_haxe_file_read(int p_handle, const void *p_out, int p_size) {
+	if (g_host.file_read == nullptr || p_out == nullptr || p_size <= 0) {
+		return -1;
+	}
+	int64_t read = g_host.file_read((int64_t)p_handle, (void *)p_out, (int64_t)p_size);
+	return read < 0 ? -1 : (int)read;
+}
+
+int hxgodot_haxe_file_seek(int p_handle, int64_t p_position) {
+	if (g_host.file_seek == nullptr) {
+		return -1;
+	}
+	return (int)g_host.file_seek((int64_t)p_handle, p_position);
+}
+
+void hxgodot_haxe_file_close(int p_handle) {
+	if (g_host.file_close == nullptr) {
+		return;
+	}
+	g_host.file_close((int64_t)p_handle);
+}
+
+/* Streaming audio. The stream is created and owned by the engine (a native
+ * `AudioStream` fed from another thread), so Haxe only ever holds the small
+ * handle: no generated binding has to know about the class. `open` returns 0 on
+ * failure. `write` is called from the decoder's audio callback thread and is
+ * deliberately free of any bookkeeping that expects the main thread. */
+int hxgodot_haxe_audio_stream_open(double p_mix_rate, double p_buffer_len, double p_target_len) {
+	if (g_host.audio_stream_open == nullptr) {
+		return 0;
+	}
+	return (int)g_host.audio_stream_open(p_mix_rate, p_buffer_len, p_target_len);
+}
+
+bool hxgodot_haxe_audio_stream_attach(int p_handle, String p_player_id) {
+	if (g_host.audio_stream_attach == nullptr) {
+		return false;
+	}
+	return g_host.audio_stream_attach((int64_t)p_handle, (int64_t)strtoll(p_player_id.utf8_str(), nullptr, 10)) == 0;
+}
+
+int hxgodot_haxe_audio_stream_write(int p_handle, const void *p_samples, int p_frames, int p_channels) {
+	if (g_host.audio_stream_write == nullptr || p_samples == nullptr) {
+		return -1;
+	}
+	return g_host.audio_stream_write((int64_t)p_handle, p_samples, p_frames, p_channels);
+}
+
+int hxgodot_haxe_audio_stream_buffered(int p_handle) {
+	if (g_host.audio_stream_buffered == nullptr) {
+		return -1;
+	}
+	return (int)g_host.audio_stream_buffered((int64_t)p_handle);
+}
+
+void hxgodot_haxe_audio_stream_reset(int p_handle) {
+	if (g_host.audio_stream_reset == nullptr) {
+		return;
+	}
+	g_host.audio_stream_reset((int64_t)p_handle);
+}
+
+int hxgodot_haxe_audio_stream_stat(int p_handle, int p_which) {
+	if (g_host.audio_stream_stat == nullptr) {
+		return -1;
+	}
+	return (int)g_host.audio_stream_stat((int64_t)p_handle, p_which);
+}
+
+void hxgodot_haxe_audio_stream_close(int p_handle) {
+	if (g_host.audio_stream_close == nullptr) {
+		return;
+	}
+	g_host.audio_stream_close((int64_t)p_handle);
 }
 
 int hxgodot_haxe_store_closure(Dynamic p_function) {

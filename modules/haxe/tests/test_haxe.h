@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include "../haxe_audio_stream.h"
 #include "../haxe_build.h"
 #include "../haxe_completion.h"
 #include "../haxe_elf.h"
@@ -42,6 +43,7 @@
 #include "../haxe_source.h"
 #include "../haxe_stdlib.h"
 #include "../haxe_support.h"
+#include "../haxe_value.h"
 
 #ifdef TOOLS_ENABLED
 #include "../editor/haxe_export_plugin.h"
@@ -58,11 +60,13 @@
 #include "core/io/json.h"
 #include "core/object/script_language.h"
 #include "core/templates/hash_set.h"
+#include "core/templates/local_vector.h"
 #include "core/variant/variant.h"
 // `Node` is a base class of every scripted scene type the tests instantiate.
 // Editor builds get it through `scene/gui/text_edit.h` below, template builds
 // (which compile these tests with `tests=yes`) do not, so include it directly.
 #include "scene/main/node.h"
+#include "servers/audio/audio_stream.h"
 #include "tests/test_macros.h"
 
 // The helpers the cases below call are declared in `test_haxe_utils.h` and
@@ -342,6 +346,105 @@ TEST_CASE("[Modules][Haxe] completion lists engine members for a typed receiver"
 	CHECK(names.has("distance_to"));
 }
 
+TEST_CASE("[Modules][Haxe] a call hint names the arguments of a project function") {
+	const String dir = make_scratch_dir();
+	const String path = write_source(dir, "Probe.hx",
+			"package game;\n"
+			"import godot.Node2D;\n"
+			"class Probe extends Node2D {\n"
+			"\tfunction play(file:String, volume:Float):Bool {\n"
+			"\t\treturn true;\n"
+			"\t}\n"
+			"\tfunction run():Void {\n"
+			"\t\tself.play(0);\n"
+			"\t}\n"
+			"}\n");
+	SourceDirScope scope(dir);
+	const String marker = String::chr(0xFFFF);
+
+	List<ScriptLanguage::CodeCompletionOption> options;
+	bool force = false;
+	String call_hint;
+
+	// `self.play(` resolves through the edited script, and the argument the
+	// caret is on (the first) is the one wrapped in U+FFFF.
+	const String first = "package game;\nimport godot.Node2D;\nclass Probe extends Node2D {\n"
+						 "\tfunction play(file:String, volume:Float):Bool {\n\t\treturn true;\n\t}\n"
+						 "\tfunction run():Void {\n\t\tself.play(" +
+			marker + ");\n\t}\n}\n";
+	REQUIRE(haxe_complete_code(first, path, nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "Bool play(" + marker + "file: String" + marker + ", volume: Float)");
+
+	// The second argument is marked instead once a comma precedes the caret.
+	options.clear();
+	const String second = "package game;\nimport godot.Node2D;\nclass Probe extends Node2D {\n"
+						  "\tfunction play(file:String, volume:Float):Bool {\n\t\treturn true;\n\t}\n"
+						  "\tfunction run():Void {\n\t\tself.play(\"x\", " +
+			marker + ");\n\t}\n}\n";
+	REQUIRE(haxe_complete_code(second, path, nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "Bool play(file: String, " + marker + "volume: Float" + marker + ")");
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a call hint names the arguments of an engine method") {
+	const String marker = String::chr(0xFFFF);
+	const String header = "import godot.Vector2;\nclass Probe {\n\tfunction f() {\n\t\tvar v:Vector2;\n\t\t";
+	const String footer = ";\n\t}\n}\n";
+
+	List<ScriptLanguage::CodeCompletionOption> options;
+	bool force = false;
+	String call_hint;
+
+	// The names come from api.json, not from the receiver.
+	REQUIRE(haxe_complete_code(header + "v.rotated(" + marker + ")" + footer, String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "godot.Vector2 rotated(" + marker + "angle: Float" + marker + ")");
+
+	options.clear();
+	REQUIRE(haxe_complete_code(header + "v.move_toward(v, " + marker + ")" + footer, String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "godot.Vector2 move_toward(to: godot.Vector2, " + marker + "delta: Float" + marker + ")");
+}
+
+TEST_CASE("[Modules][Haxe] a call hint marks a vararg rest argument") {
+	const String marker = String::chr(0xFFFF);
+	const String header = "import godot.Node;\nclass Probe {\n\tfunction f() {\n\t\tvar n:Node;\n\t\t";
+	const String footer = ";\n\t}\n}\n";
+
+	List<ScriptLanguage::CodeCompletionOption> options;
+	bool force = false;
+	String call_hint;
+
+	// A declared parameter is marked before the rest argument.
+	REQUIRE(haxe_complete_code(header + "n.call(" + marker + ")" + footer, String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "Dynamic call(" + marker + "method: String" + marker + ", ...args: Array)");
+
+	// Past the declared parameters the rest argument itself is marked.
+	options.clear();
+	REQUIRE(haxe_complete_code(header + "n.call(\"x\", " + marker + ")" + footer, String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint == "Dynamic call(method: String, " + marker + "...args: Array" + marker + ")");
+}
+
+TEST_CASE("[Modules][Haxe] no call hint outside a call") {
+	const String marker = String::chr(0xFFFF);
+	List<ScriptLanguage::CodeCompletionOption> options;
+	bool force = false;
+	String call_hint;
+
+	// Not inside a parenthesis at all.
+	REQUIRE(haxe_complete_code("class Probe {\n\tvar x = " + marker + ";\n}\n", String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint.is_empty());
+
+	// The only `(` is inside a string literal, which is not a call.
+	options.clear();
+	REQUIRE(haxe_complete_code("class Probe {\n\tvar s = \"(\";\n\tvar y = 1" + marker + ";\n}\n", String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint.is_empty());
+
+	// A parameter list in a declaration is not a call either.
+	options.clear();
+	REQUIRE(haxe_complete_code("class Probe {\n\tfunction f(a:" + marker + "Int) {\n\t}\n}\n", String(), nullptr, &options, force, call_hint) == OK);
+	CHECK(call_hint.is_empty());
+}
+
 TEST_CASE("[Modules][Haxe] lookup resolves an engine class member") {
 	ScriptLanguage::LookupResult result;
 	REQUIRE(haxe_lookup_code("Vector2.", "distance_to", String(), nullptr, result) == OK);
@@ -446,6 +549,58 @@ TEST_CASE("[Modules][Haxe] extra arguments split the option from its value") {
 	CHECK(normalized[8] == "x('quoted', 1)");
 }
 
+TEST_CASE("[Modules][Haxe] compiler arguments round-trip through an hxml file") {
+	// The Windows build hands its options to the compiler through an `.hxml`
+	// file, because the process API cannot pass an argument that contains a
+	// double quote. The file has to read back as the same list the build built.
+	const Vector<String> original = {
+		"-cp",
+		"/project/source",
+		"-main",
+		"game.Main",
+		"-D",
+		"hxgodot_editor",
+		"--macro",
+		"haxe.macro.Compiler.define(\"libhxcpp\",\"6.0.0\")",
+		"--macro",
+		"addGlobalMetadata('mylib.BaseThing', '@:keep', true, false, true)",
+		"-D",
+		"feature=on",
+	};
+	List<String> arguments;
+	for (const String &argument : original) {
+		arguments.push_back(argument);
+	}
+
+	const String hxml = HaxeBuild::serialize_hxml_arguments(arguments);
+	// A token with no whitespace is a line of its own (the loader reads it as
+	// one argument, quotes and all); the option and a value that contains
+	// spaces stay on one line.
+	CHECK(hxml.contains("haxe.macro.Compiler.define(\"libhxcpp\",\"6.0.0\")\n"));
+	CHECK(hxml.contains("--macro addGlobalMetadata('mylib.BaseThing', '@:keep', true, false, true)\n"));
+
+	// Read it back the way the compiler's hxml loader does: one argument per
+	// line, and a line holding a space yields the option plus everything after
+	// the first space as its value.
+	Vector<String> read_back;
+	for (const String &line : hxml.split("\n")) {
+		if (line.is_empty()) {
+			continue;
+		}
+		const int space = line.find_char(' ');
+		if (space < 0) {
+			read_back.push_back(line);
+		} else {
+			read_back.push_back(line.substr(0, space));
+			read_back.push_back(line.substr(space + 1));
+		}
+	}
+	REQUIRE(read_back.size() == original.size());
+	for (int i = 0; i < original.size(); i++) {
+		CHECK(read_back[i] == original[i]);
+	}
+}
+
 TEST_CASE("[Modules][Haxe] the boot class routes trace to the engine log") {
 	// hxcpp sends `trace()` to stdout. Rebinding `haxe.Log.trace` in the
 	// generated entry point makes a `trace()` reach the engine's output system
@@ -453,6 +608,111 @@ TEST_CASE("[Modules][Haxe] the boot class routes trace to the engine log") {
 	const String boot = HaxeBuild::generate_boot_class({});
 	CHECK(boot.contains("haxe.Log.trace = function"));
 	CHECK(boot.contains("hxgodot.Native.log(0, haxe.Log.formatOutput(value, infos))"));
+}
+
+TEST_CASE("[Modules][Haxe] the boot class references the attachable library classes") {
+	// A library `@:globalClass` a scene attaches is never named by project code,
+	// so `-dce full` would drop it: `@:keep` metadata only applies to a type
+	// that is typed, and an unreferenced type is not. The boot module is what
+	// forces it into the compilation; a project class of the same name stays the
+	// single reference, and an abstract project class is skipped.
+	HaxeClassInfo project_class;
+	project_class.valid = true;
+	project_class.name = "Thing";
+	project_class.fq_name = "game.Thing";
+	HaxeClassInfo abstract_class;
+	abstract_class.valid = true;
+	abstract_class.name = "Shape";
+	abstract_class.fq_name = "game.Shape";
+	abstract_class.is_abstract = true;
+
+	const Vector<String> library_classes = { "mylib.Thing", "hxvlc.godot.Video" };
+	const String boot = HaxeBuild::generate_boot_class({ project_class, abstract_class }, library_classes);
+	CHECK(boot.contains("\t\tgame.Thing,\n"));
+	// The library class of the same short name is kept and is the only entry for
+	// that fully qualified name.
+	CHECK(boot.count("mylib.Thing") == 1);
+	CHECK(boot.contains("\t\thxvlc.godot.Video,\n"));
+	CHECK_FALSE(boot.contains("game.Shape"));
+	CHECK_FALSE(boot.contains("mylib.BaseThing"));
+}
+
+TEST_CASE("[Modules][Haxe] the toolchain host API version is read from its header") {
+	// The engine refuses a library whose glue was compiled for another host API
+	// version, so `build()` compares the version the toolchain header declares
+	// with the engine's before compiling. A missing or malformed header has to
+	// read as "unknown" rather than as a wrong version.
+	const String dir = make_scratch_dir();
+	CHECK(HaxeBuild::read_toolchain_abi_version(dir.path_join("missing")) == -1);
+
+	(void)write_source(dir, "hxgodot_abi.h",
+			"/* a comment mentioning HXGODOT_ABI_VERSION 99 */\n"
+			"#define HXGODOT_ABI_VERSION 7\n"
+			"#define HXGODOT_ABI_VERSION_EXTRA\n");
+	CHECK(HaxeBuild::read_toolchain_abi_version(dir) == 7);
+
+	// A header without the define is unknown, not version 0.
+	(void)write_source(dir, "hxgodot_abi.h", "#define SOMETHING_ELSE 1\n");
+	CHECK(HaxeBuild::read_toolchain_abi_version(dir) == -1);
+
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a library reports the host API version it was built for") {
+	// The version is named in the failure message so a stale library or a
+	// mismatched export template is obvious, instead of only "incompatible
+	// host API version".
+	CHECK(HaxeRuntime::library_abi_from_info("abi=4\nruntime=hxcpp\nbuilt=Nov 21 2026\n") == "4");
+	CHECK(HaxeRuntime::library_abi_from_info("runtime=hxcpp\nabi=12\n") == "12");
+	// A library built before the field existed reports nothing.
+	CHECK(HaxeRuntime::library_abi_from_info("runtime=hxcpp\n") == "");
+	CHECK(HaxeRuntime::library_abi_from_info("") == "");
+}
+
+TEST_CASE("[Modules][Haxe] the host API streams files through the engine file system") {
+	// A project library cannot link the engine, so a decoder that brings its
+	// own I/O (LibVLC) reads a packed res:// entry in an exported game through
+	// these host functions. They have to behave like FileAccess: report the
+	// size, read and seek at byte offsets, and refuse handles that were
+	// released or never existed.
+	const String dir = make_scratch_dir();
+	const String path = write_source(dir, "stream.bin", "0123456789");
+
+	int64_t size = -1;
+	const int64_t handle = HaxeRuntime::host_file_open(path.utf8().get_data(), &size);
+	REQUIRE(handle > 0);
+	CHECK(size == 10);
+	CHECK(HaxeRuntime::host_file_size(handle) == 10);
+
+	char buffer[8] = {};
+	CHECK(HaxeRuntime::host_file_read(handle, buffer, 4) == 4);
+	CHECK(String::utf8(buffer, 4) == "0123");
+
+	// The position advanced, and reading again continues from there.
+	CHECK(HaxeRuntime::host_file_read(handle, buffer, 2) == 2);
+	CHECK(String::utf8(buffer, 2) == "45");
+
+	// A seek repositions the stream; reading to the end reports the remaining
+	// bytes first and end of file afterwards.
+	CHECK(HaxeRuntime::host_file_seek(handle, 8) == 0);
+	CHECK(HaxeRuntime::host_file_read(handle, buffer, 8) == 2);
+	CHECK(String::utf8(buffer, 2) == "89");
+	CHECK(HaxeRuntime::host_file_read(handle, buffer, 4) == 0);
+
+	HaxeRuntime::host_file_close(handle);
+	CHECK(HaxeRuntime::host_file_size(handle) == -1);
+	CHECK(HaxeRuntime::host_file_read(handle, buffer, 4) < 0);
+	CHECK(HaxeRuntime::host_file_seek(handle, 0) < 0);
+
+	// A path the engine cannot open yields no handle, and bad arguments are
+	// rejected instead of dereferencing a null buffer.
+	int64_t missing_size = 0;
+	CHECK(HaxeRuntime::host_file_open(dir.path_join("missing.bin").utf8().get_data(), &missing_size) == 0);
+	CHECK(HaxeRuntime::host_file_open(nullptr, nullptr) == 0);
+	CHECK(HaxeRuntime::host_file_read(handle, nullptr, 4) < 0);
+	CHECK(HaxeRuntime::host_file_seek(handle, -1) < 0);
+
+	remove_scratch_dir(dir);
 }
 
 TEST_CASE("[Modules][Haxe] qualified receivers complete project and engine members") {
@@ -1450,6 +1710,152 @@ TEST_CASE("[Modules][Haxe] export custom features become Haxe defines for a game
 	remove_scratch_dir(dir);
 }
 
+TEST_CASE("[Modules][Haxe] an export preset's compiler options join the build arguments") {
+	// The project settings are the baseline for every build; an export preset
+	// may override the dead-code mode and add defines and raw arguments. The
+	// preset's tokens have to reach the compiler *after* the project's, so they
+	// can override a project default, and they have to be part of the build
+	// stamp, or a preset change would silently reuse the library the previous
+	// options produced.
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	REQUIRE(settings != nullptr);
+	const Variant previous_dce = settings->get(HaxeProject::SETTING_DCE);
+
+	settings->set(HaxeProject::SETTING_DCE, "std");
+	CHECK(HaxeProject::get_dce() == "std");
+
+	// The project setting alone: the empty `Options` resolves to it.
+	const Vector<String> baseline_tokens = HaxeBuild::options_arguments(HaxeBuild::Options());
+	REQUIRE(baseline_tokens.size() == 2);
+	CHECK(baseline_tokens[0] == "-dce");
+	CHECK(baseline_tokens[1] == "std");
+
+	HaxeBuild::Options overrides;
+	overrides.dce = "no";
+	overrides.defines.push_back("RELEASE");
+	overrides.defines.push_back("FEATURE=1");
+	overrides.arguments.push_back("--no-opt");
+
+	const Vector<String> tokens = HaxeBuild::options_arguments(overrides);
+	REQUIRE(tokens.size() == 7);
+	CHECK(tokens[0] == "-dce");
+	CHECK(tokens[1] == "no");
+	CHECK(tokens[2] == "-D");
+	CHECK(tokens[3] == "RELEASE");
+	CHECK(tokens[4] == "-D");
+	CHECK(tokens[5] == "FEATURE=1");
+	CHECK(tokens[6] == "--no-opt");
+
+	// An unknown mode falls back to the project setting instead of being
+	// passed to the compiler, and empty entries are dropped.
+	HaxeBuild::Options bogus;
+	bogus.dce = "sometimes";
+	CHECK(bogus.resolved().dce == "std");
+	HaxeBuild::Options padded;
+	padded.defines.push_back("  A  ");
+	padded.defines.push_back("   ");
+	REQUIRE(padded.resolved().defines.size() == 1);
+	CHECK(padded.resolved().defines[0] == "A");
+
+	// `is_default()` compares against the project baseline, not against an
+	// empty string, so an explicit mode equal to the project one is still the
+	// default while a different one is not.
+	CHECK(HaxeBuild::Options().is_default());
+	HaxeBuild::Options same_mode;
+	same_mode.dce = "std";
+	CHECK(same_mode.is_default());
+	CHECK_FALSE(overrides.is_default());
+
+	// The tokens end the real argument list, after every project token.
+	if (HaxeSupport::is_available()) {
+		const String dir = make_scratch_dir();
+		(void)write_source(dir, "Main.hx",
+				"package;\n"
+				"import godot.Node;\n"
+				"class Main extends Node {\n"
+				"}\n");
+		SourceDirScope scope(dir);
+
+		Vector<HaxeBuild::Library> libraries;
+		Vector<HaxeClassInfo> classes;
+		Vector<Pair<String, String>> mappings;
+		const Vector<String> arguments = HaxeBuild::collect_arguments(true, false, libraries, classes, mappings, String(), String(), overrides);
+		REQUIRE(arguments.size() >= tokens.size());
+		const int start = arguments.size() - tokens.size();
+		for (int i = 0; i < tokens.size(); i++) {
+			CHECK_MESSAGE(arguments[start + i] == tokens[i], vformat("token %d of the preset options", i));
+		}
+		remove_scratch_dir(dir);
+	}
+
+	// The stamp is a function of the options, so a preset that changes them
+	// rebuilds.
+	const String stamp_default = HaxeBuild::current_stamp(false, false);
+	const String stamp_override = HaxeBuild::current_stamp(false, false, String(), overrides);
+	CHECK(stamp_default != stamp_override);
+	CHECK(stamp_override == HaxeBuild::current_stamp(false, false, String(), overrides));
+
+	settings->set(HaxeProject::SETTING_DCE, previous_dce);
+}
+
+TEST_CASE("[Editor][Modules][Haxe] the export preset exposes the Haxe compiler options") {
+	// An ordinary Godot project must not grow a Haxe section in its export
+	// dialog. A project with a Haxe script class does, and the three options
+	// have to be registered with defaults that mean "leave it to the project",
+	// so a preset nobody edited compiles exactly like the editor did.
+	Ref<HaxeExportPlugin> plugin;
+	plugin.instantiate();
+	const String dir = make_scratch_dir();
+	const String libs = make_scratch_dir();
+
+	{
+		SourceDirScope sources(dir);
+		HaxelibDirScope libraries(libs);
+		List<EditorExportPlatform::ExportOption> options;
+		plugin->_get_export_options(Ref<EditorExportPlatform>(), &options);
+		CHECK(options.is_empty());
+	}
+
+	(void)write_source(dir, "Main.hx",
+			"package;\n"
+			"import godot.Node;\n"
+			"class Main extends Node {\n"
+			"}\n");
+	{
+		SourceDirScope sources(dir);
+		HaxelibDirScope libraries(libs);
+		List<EditorExportPlatform::ExportOption> options;
+		plugin->_get_export_options(Ref<EditorExportPlatform>(), &options);
+
+		bool has_dce = false;
+		bool has_defines = false;
+		bool has_arguments = false;
+		for (const EditorExportPlatform::ExportOption &option : options) {
+			const StringName name = option.option.name;
+			if (name == "haxe/dce") {
+				has_dce = true;
+				CHECK(option.option.type == Variant::INT);
+				// 0 is "Project default": the index of the first enum entry.
+				CHECK((int)option.default_value == 0);
+			} else if (name == "haxe/defines") {
+				has_defines = true;
+				CHECK(option.option.type == Variant::PACKED_STRING_ARRAY);
+				CHECK(PackedStringArray(option.default_value).is_empty());
+			} else if (name == "haxe/extra_arguments") {
+				has_arguments = true;
+				CHECK(option.option.type == Variant::PACKED_STRING_ARRAY);
+				CHECK(PackedStringArray(option.default_value).is_empty());
+			}
+		}
+		CHECK(has_dce);
+		CHECK(has_defines);
+		CHECK(has_arguments);
+	}
+
+	remove_scratch_dir(dir);
+	remove_scratch_dir(libs);
+}
+
 TEST_CASE("[Modules][Haxe] build errors are formatted with the file and position") {
 	HaxeBuild::Result result;
 	ScriptLanguage::ScriptError located;
@@ -1572,6 +1978,80 @@ TEST_CASE("[Modules][Haxe] the toolchain glue includes hxcpp before its own head
 	// the quoted includes above the system include breaks every project build,
 	// so the order is part of the contract.
 	CHECK_MESSAGE(hxcpp < glue_header, "glue.cpp must include <hxcpp.h> before hxgodot_glue.h");
+}
+
+TEST_CASE("[Modules][Haxe] the glue clears the value binding only on a value type") {
+	if (!HaxeSupport::is_available()) {
+		return;
+	}
+	const String dir = HaxeSupport::get_dir();
+	REQUIRE_FALSE(dir.is_empty());
+	Ref<FileAccess> file = FileAccess::open(dir.path_join("toolchain").path_join("glue.cpp"), FileAccess::READ);
+	REQUIRE(file.is_valid());
+	const String source = file->get_as_utf8_string();
+
+	// `make_builtin` runs `ConstructEmpty`, which skips the Haxe constructor,
+	// so a value type's `__hxowner` binding keeps a stale pointer and has to be
+	// cleared before the value is handed out. Only the value-type wrappers
+	// declare that member: `__SetField` throws `Invalid field:` for one a class
+	// does not have, which failed every packed array, `Dictionary` and `RID`
+	// returned by an engine call. The guard is what lets those returns work.
+	CHECK(source.find("bool class_has_value_binding(hx::Class p_class)") >= 0);
+	CHECK(source.find("if (class_has_value_binding(cls)) {") >= 0);
+	CHECK(source.find("g_value_binding_cache") >= 0);
+	// A class that declares the binding still gets it cleared.
+	CHECK(source.find("value.mPtr->__SetField(String(\"__hxowner\"), null(), HX_PROP_DYNAMIC);") >= 0);
+}
+
+TEST_CASE("[Modules][Haxe] a packed byte array crosses the wire one byte per element") {
+	// The engine and the compiled glue share one tagged blob format. A byte
+	// array is the only packed type that does not travel eight bytes per
+	// element: it is written as raw bytes. The engine's encoder always wrote
+	// it that way and the glue's `encode_container` agrees, but the decoder on
+	// the glue side read a `u64` per element. A byte array returned by an
+	// engine call (`FileAccess.get_file_as_bytes`) therefore came back with
+	// every element shifted and the stream consumed eight times too fast.
+	PackedByteArray array;
+	array.resize(4);
+	array.set(0, 0x00);
+	array.set(1, 0x20);
+	array.set(2, 0xFF);
+	array.set(3, 0x41);
+
+	Vector<uint8_t> blob;
+	hx_value_encode_variant(array, blob);
+
+	REQUIRE(blob.size() == 1 + 4 + 4);
+	CHECK(blob[0] == HXG_PACKED_BYTE_ARRAY);
+	// A little-endian count of four, then the four bytes unchanged.
+	CHECK(blob[1] == 4);
+	CHECK(blob[2] == 0);
+	CHECK(blob[3] == 0);
+	CHECK(blob[4] == 0);
+	CHECK(blob[5] == 0x00);
+	CHECK(blob[6] == 0x20);
+	CHECK(blob[7] == 0xFF);
+	CHECK(blob[8] == 0x41);
+
+	// The reader on the other side has to consume one byte per element, so the
+	// two ends cannot drift apart again without a test failing.
+	if (!HaxeSupport::is_available()) {
+		return;
+	}
+	const String dir = HaxeSupport::get_dir();
+	Ref<FileAccess> file = FileAccess::open(dir.path_join("toolchain").path_join("glue.cpp"), FileAccess::READ);
+	REQUIRE(file.is_valid());
+	const String source = file->get_as_utf8_string();
+
+	const int decoder = source.find("Dynamic decode_container(Reader &p_reader, int p_kind) {");
+	REQUIRE(decoder >= 0);
+	const int byte_case = source.find("case HXG_PACKED_BYTE_ARRAY: {", decoder);
+	REQUIRE(byte_case >= 0);
+	const int int_case = source.find("case HXG_PACKED_INT32_ARRAY:", byte_case);
+	REQUIRE(int_case > byte_case);
+	const String byte_block = source.substr(byte_case, int_case - byte_case);
+	CHECK(byte_block.find("read_u8(value)") >= 0);
+	CHECK_MESSAGE(byte_block.find("read_u64(value)") < 0, "a byte array must read one byte per element");
 }
 
 TEST_CASE("[Modules][Haxe] a script constructor binds its node before the body runs") {
@@ -2321,6 +2801,33 @@ TEST_CASE("[Editor][Modules][Haxe] Android templates are searched through their 
 
 	remove_scratch_dir(dir);
 }
+
+TEST_CASE("[Editor][Modules][Haxe] the host API version of an export template is checked") {
+	// The engine binary carries its host API marker; the export refuses a
+	// template built for another version instead of shipping a game that fails
+	// with "incompatible host API version". The running engine's own binary has
+	// to carry the marker too — `print_verbose()` in the module init is what
+	// keeps it there, so this also guards against it being dropped.
+	const String executable = OS::get_singleton()->get_executable_path();
+	CHECK(HaxeExportPlugin::template_host_abi_matches(executable));
+	CHECK(HaxeExportPlugin::template_declares_host_abi(executable));
+
+	const String dir = make_scratch_dir();
+	const String matching = write_source(dir, "matches.bin", String("ELF ") + HXGODOT_TEMPLATE_ABI_MARKER + " tail\n");
+	const String other = write_source(dir, "other.bin", "ELF hxgodot-abi=999; tail\n");
+	const String older = write_source(dir, "older.bin", "ELF payload HaxeScript, no marker\n");
+	// A marker for another version is found by the prefix search but does not
+	// match this engine.
+	CHECK_FALSE(HaxeExportPlugin::template_host_abi_matches(other));
+	CHECK(HaxeExportPlugin::template_declares_host_abi(other));
+	CHECK_FALSE(HaxeExportPlugin::template_host_abi_matches(older));
+	CHECK_FALSE(HaxeExportPlugin::template_declares_host_abi(older));
+	CHECK(HaxeExportPlugin::template_host_abi_matches(matching));
+	// The trailing `;` keeps `...=4;` from matching a longer version number.
+	CHECK_FALSE(HaxeExportPlugin::template_host_abi_matches(write_source(dir, "long.bin", "ELF hxgodot-abi=40; tail\n")));
+
+	remove_scratch_dir(dir);
+}
 #endif
 
 #ifdef TOOLS_ENABLED
@@ -2557,6 +3064,51 @@ TEST_CASE("[Modules][Haxe] a build with no packaged manifest is not an exported 
 	// Restore the default so the following cases re-decide for themselves.
 	HaxeProject::set_packaged_metadata_for_testing(false);
 	HaxeProject::reset_packaged_metadata_state();
+}
+
+TEST_CASE("[Modules][Haxe] an exported game does not scan the on-disk library index") {
+	// The library index walks the project's `haxelib/` directory. In an
+	// exported game that directory is a pack entry holding empty `.hx` stubs
+	// and `globalize_path("res://")` has no real directory to resolve, so the
+	// scan could only fail -- which is what produced the spurious `haxe.json`
+	// and `/haxelib` errors on Android. The packaged manifest is the game's
+	// index instead, so a game must skip the scan entirely.
+	const String dir = make_scratch_dir();
+	const String haxelib_root = dir.path_join("haxelib");
+	const String version_root = haxelib_root.path_join("mylib").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json",
+			"{\n"
+			"\t\"name\": \"mylib\",\n"
+			"\t\"classPath\": \"src\"\n"
+			"}\n");
+	(void)write_source(version_root.path_join("src").path_join("mylib"), "Widget.hx",
+			"package mylib;\n"
+			"class Widget {\n"
+			"\tpublic var label:String;\n"
+			"}\n");
+
+	HaxelibDirScope scope(haxelib_root);
+
+	// The library is on disk, so the editor's index finds it.
+	HaxeLibraryIndex *libraries = HaxeLibraryIndex::get_singleton();
+	REQUIRE(libraries->ensure_indexed());
+	CHECK(libraries->has_type("mylib.Widget"));
+
+	// A game leaves the index empty: the same on-disk library is not indexed
+	// and nothing touches `haxelib/` (or the machine-wide repository).
+	{
+		PackagedMetadataScope state;
+		libraries->invalidate();
+		CHECK_FALSE(libraries->ensure_indexed());
+		CHECK_FALSE(libraries->has_type("mylib.Widget"));
+	}
+
+	// Leaving the scope restores the editor behaviour.
+	libraries->invalidate();
+	REQUIRE(libraries->ensure_indexed());
+	CHECK(libraries->has_type("mylib.Widget"));
+
+	remove_scratch_dir(dir);
 }
 
 TEST_CASE("[Modules][Haxe] Android libraries use the name the linker resolves") {
@@ -3023,14 +3575,15 @@ TEST_CASE("[Modules][Haxe] a project class extends a library class") {
 	CHECK(library_scripts.has("mylib.BaseThing"));
 	CHECK(library_scripts.size() == 1);
 
-	// The build marks that class's fields `@:keep`, so the Inspector's
-	// `@:export` members and the engine-called overrides survive `-dce full`.
-	// The class itself is not kept: a library class no project code uses stays
-	// dead code.
+	// The build marks that class `@:keep` (type and fields), so the engine can
+	// instantiate it from a scene even when no project code says `new`, and its
+	// `@:export` members and engine-called overrides survive `-dce full`. A
+	// library `@:globalClass` is offered as an attachable script, so keeping
+	// the type is what makes an exported game run it.
 	Vector<Pair<String, String>> keep_mappings;
 	const Vector<String> keep_arguments = HaxeBuild::collect_arguments(false, false, Vector<HaxeBuild::Library>(), Vector<HaxeClassInfo>(), keep_mappings);
 	CHECK(keep_arguments.has("--macro"));
-	CHECK(keep_arguments.has("addGlobalMetadata('mylib.BaseThing', '@:keep', true, false, true)"));
+	CHECK(keep_arguments.has("addGlobalMetadata('mylib.BaseThing', '@:keep', true, true, true)"));
 
 	// The engine asks the script instance whether it has a method, and it must
 	// answer for a method inherited from the library base: `_ready` declared by
@@ -3114,6 +3667,76 @@ TEST_CASE("[Modules][Haxe] library @:globalClass types are registered with the e
 
 	ScriptServer::remove_global_class("ProjectThing");
 	ScriptServer::remove_global_class("GdThing");
+	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] a library global class is packaged for an exported game") {
+	const String dir = make_scratch_dir();
+	// A project-local haxelib with one Godot-facing `@:globalClass` class, the
+	// same shape as `hxvlc.godot.Video`: a scene saves it by its `res://` path.
+	const String haxelib_root = dir.path_join("haxelib");
+	const String version_root = haxelib_root.path_join("visual").path_join("1.0.0");
+	(void)write_source(version_root, "haxelib.json",
+			"{\n\t\"name\": \"visual\",\n\t\"classPath\": \"src\"\n}\n");
+	const String video_path = write_source(version_root.path_join("src").path_join("visual"), "Video.hx",
+			"package visual;\n"
+			"import godot.Sprite2D;\n"
+			"@:globalClass\n"
+			"class Video extends Sprite2D {\n"
+			"\t@:export var defaultVideo:String = \"\";\n"
+			"\toverride function _ready():Void {}\n"
+			"}\n");
+	const String project_dir = dir.path_join("source");
+	HaxelibDirScope lib_scope(haxelib_root);
+	SourceDirScope src_scope(project_dir);
+
+	// The exporter blanks every `.hx` it ships and writes this manifest in its
+	// place. A library source is `.gdignore`d, so it never reaches the
+	// per-file exporter; its description has to be in the manifest under the
+	// very path a saved scene references.
+	const String key = ProjectSettings::get_singleton()->localize_path(video_path);
+	const String document = HaxeProject::serialize_script_metadata();
+	{
+		JSON json;
+		REQUIRE(json.parse(document) == OK);
+		Dictionary root = json.get_data();
+		REQUIRE(root.has("scripts"));
+		Dictionary scripts = root["scripts"];
+		REQUIRE(scripts.has(key));
+		Dictionary entry = scripts[key];
+		CHECK(String(entry.get("name", String())) == "Video");
+		CHECK(String(entry.get("base", String())) == "Sprite2D");
+		CHECK(String(entry.get("fq_name", String())) == "visual.Video");
+		CHECK((bool)entry.get("is_global_class", false));
+		CHECK(String(entry.get("path", String())) == key);
+	}
+
+	// Blank the source the way the exporter does, then load the manifest: the
+	// stub resolves to the library class description instead of failing, so an
+	// exported game can attach and instantiate it.
+	(void)write_source(video_path.get_base_dir(), video_path.get_file(), "\n");
+	const String manifest = dir.path_join("scripts.json");
+	{
+		Ref<FileAccess> file = FileAccess::open(manifest, FileAccess::WRITE);
+		REQUIRE(file.is_valid());
+		file->store_string(document);
+	}
+
+	PackagedMetadataScope state;
+	REQUIRE(HaxeProject::load_script_metadata(manifest));
+
+	HaxeClassInfo info;
+	REQUIRE(HaxeProject::get_class_info(key, info));
+	CHECK(info.name == "Video");
+	CHECK(info.fq_name == "visual.Video");
+	CHECK(info.is_global_class);
+	CHECK(HaxeProject::resolve_native_base(info) == "Sprite2D");
+
+	Ref<HaxeScript> script;
+	script.instantiate();
+	REQUIRE(script->load_source_code(key) == OK);
+	CHECK(script->is_valid());
+
 	remove_scratch_dir(dir);
 }
 
@@ -3398,6 +4021,110 @@ TEST_CASE("[Modules][Haxe] bundled native libraries are resolved for one Android
 	CHECK(missing.has("libc++_shared.so"));
 
 	remove_scratch_dir(dir);
+}
+
+TEST_CASE("[Modules][Haxe] HaxeAudioStream is written by a producer thread and pulled by the mixer") {
+	Ref<HaxeAudioStream> stream;
+	stream.instantiate();
+	CHECK(stream->get_stream_name() == "HaxeAudioStream");
+	CHECK(stream->is_monophonic());
+	CHECK(stream->buffered_frames() == 0);
+
+	// Half a second of ring, and the few dozen milliseconds of backlog the
+	// consumer waits for before it starts pulling.
+	const double rate = 44100.0;
+	stream->configure(rate, 0.5, 0.04);
+	const int target = (int)Math::ceil(rate * 0.04);
+
+	// Interleaved signed 16 bit, as LibVLC hands the samples over. The helper
+	// fills a mono chunk with a constant sample and writes it.
+	LocalVector<int16_t> samples;
+	const int16_t raw = 16384; // 0.5 in signed 16 bit
+	const auto write_mono = [&](int p_count) {
+		samples.resize(p_count);
+		for (int i = 0; i < p_count; i++) {
+			samples[i] = raw;
+		}
+		return stream->write_frames(samples.ptr(), p_count, 1);
+	};
+
+	// A chunk smaller than the backlog is queued but not consumed: the consumer
+	// holds silence until it has enough to play without underrunning.
+	CHECK(write_mono(100) == 100);
+	CHECK(stream->buffered_frames() == 100);
+
+	LocalVector<AudioFrame> mixed;
+	mixed.resize(512);
+
+	// A playback is what the audio server actually mixes, and it is the only
+	// thing that ever pulls from the stream.
+	Ref<AudioStreamPlayback> playback = stream->instantiate_playback();
+	REQUIRE(playback.is_valid());
+	CHECK(!playback->is_playing());
+	playback->start(0.0);
+	CHECK(playback->is_playing());
+
+	CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	for (int i = 0; i < 512; i++) {
+		CHECK(mixed[i].left == 0.0f);
+		CHECK(mixed[i].right == 0.0f);
+	}
+	CHECK(stream->buffered_frames() == 100);
+
+	// Past the backlog the sound starts, and a mono source is duplicated into
+	// both channels. A pull always hands over as many frames as it was asked
+	// for; a short count would make the audio server delete the playback like a
+	// finished stream.
+	CHECK(write_mono(target) == target);
+	CHECK(stream->buffered_frames() == 100 + target);
+
+	CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	bool heard = false;
+	for (int i = 0; i < 512; i++) {
+		CHECK(mixed[i].left == mixed[i].right);
+		if (Math::abs(mixed[i].left) > 0.01f) {
+			heard = true;
+		}
+	}
+	CHECK(heard);
+	CHECK(stream->buffered_frames() < 100 + target);
+	CHECK(stream->get_underrun_count() == 0);
+
+	// Draining the queue produces silence, which is counted as an underrun.
+	while (stream->buffered_frames() > 0) {
+		CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	}
+	CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	CHECK(stream->get_underrun_count() > 0);
+
+	// A flush (a seek, or the start of a loop) drops the queue and re-arms the
+	// warm up, so the sound is not heard against a stale position.
+	stream->reset_queue();
+	CHECK(stream->buffered_frames() == 0);
+	CHECK(write_mono(200) == 200);
+	CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	CHECK(stream->buffered_frames() == 200);
+
+	// A producer that runs far ahead of real time is trimmed back to the
+	// backlog instead of leaving the sound behind the picture for good.
+	CHECK(write_mono(30000) == 30000);
+	CHECK(stream->buffered_frames() == 30200);
+	CHECK(stream->pull_frames(mixed.ptr(), 512) == 512);
+	CHECK(stream->get_trimmed_frames() > 0);
+	CHECK(stream->buffered_frames() <= target);
+
+	// A write that does not fit is dropped rather than blocking the producer's
+	// thread, and what fits is taken.
+	stream->reset_queue();
+	const int taken = write_mono(200000);
+	CHECK(taken > 0);
+	CHECK((int64_t)taken == stream->buffered_frames());
+	CHECK(stream->get_dropped_frames() == 200000 - taken);
+
+	// The playback keeps its position and stops cleanly.
+	playback->stop();
+	CHECK(!playback->is_playing());
+	CHECK(playback->get_playback_position() >= 0.0);
 }
 
 } // namespace TestHaxe

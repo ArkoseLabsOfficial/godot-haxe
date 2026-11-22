@@ -479,6 +479,7 @@ private:
 	Rect2i _render_target_get_sdf_rect(const RenderTarget *rt) const;
 
 	void _texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer, bool p_initialize);
+	bool _texture_2d_update_in_place(Texture *p_texture, const Ref<Image> &p_image, int p_layer);
 	void _texture_set_3d_data(RID p_texture, const Vector<Ref<Image>> &p_data, bool p_initialize);
 	void _texture_set_swizzle(Texture *p_texture, Image::Format p_real_format);
 	Vector<Ref<Image>> _texture_3d_read_framebuffer(Texture *p_texture) const;

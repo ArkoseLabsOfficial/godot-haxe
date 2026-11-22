@@ -1655,6 +1655,17 @@ void AudioServer::finish() {
 		AudioDriverManager::get_driver(i)->finish();
 	}
 
+	// A playback that was stopped (or whose player was freed) just before
+	// shutdown is only actually removed from `playback_list` by the mixer, and
+	// the drivers were just stopped, so it would stay in the list forever and
+	// keep its stream alive. Nothing is playing anymore at this point, so
+	// whatever is left is dropped here. `_cleanup_lists` then runs the deferred
+	// deletions the loop queues.
+	for (AudioStreamPlaybackListNode *playback_node : playback_list) {
+		_delete_stream_playback_list_node(playback_node);
+	}
+	_cleanup_lists();
+
 	for (int i = 0; i < buses.size(); i++) {
 		memdelete(buses[i]);
 	}

@@ -1655,6 +1655,17 @@ class Generator:
                 return_type = method.get("return_type")
                 if return_type is None:
                     return_type = (method.get("return_value") or {}).get("type", "void")
+                # The parameter names, renamed and de-duplicated exactly like
+                # `param()` does for the generated source, so a call hint shows
+                # the name the Haxe method actually declares.
+                argument_names = []
+                used_names = set()
+                for arg in method.get("arguments") or []:
+                    arg_name = ident(arg.get("name", ""))
+                    while arg_name in used_names:
+                        arg_name += "_"
+                    used_names.add(arg_name)
+                    argument_names.append(arg_name)
                 item = [
                     ident(method["name"]),
                     [self.type_name(a.get("type", "Variant"), True) for a in method.get("arguments") or []],
@@ -1662,6 +1673,7 @@ class Generator:
                     bool(method.get("is_static")),
                     bool(method.get("is_virtual")) and not is_builtin,
                     bool(method.get("is_vararg")),
+                    argument_names,
                 ]
                 if item[3]:
                     entry["static_methods"].append(item)

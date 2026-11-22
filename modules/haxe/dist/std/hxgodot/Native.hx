@@ -148,6 +148,81 @@ extern class Native {
 	public static function pushAudioFrames(playbackId:String, samples:cpp.RawPointer<cpp.Char>, frames:Int, channels:Int):Int;
 
 	/**
+	 * Opens a file through the engine's own file system, so a packed `res://`
+	 * entry in an exported game can be read even though it is not a real file
+	 * on disk. Returns a handle, or 0 when the file cannot be opened. Packed
+	 * or encrypted entries, `user://` files and absolute paths all go through
+	 * the same path; the handle is read with `fileRead`/`fileSeek` and released
+	 * with `fileClose`.
+	 */
+	@:native("hxgodot_haxe_file_open")
+	public static function fileOpen(path:String):Int;
+
+	/** Size of an open file in bytes, or -1 when it cannot be determined. */
+	@:native("hxgodot_haxe_file_size")
+	public static function fileSize(handle:Int):haxe.Int64;
+
+	/**
+	 * Reads at most `size` bytes from the handle's current position into
+	 * `out`, returning the number of bytes read (0 at end of file) or a
+	 * negative value on error. The position advances by the number of bytes
+	 * read. `out` is the byte pointer `cpp.NativeArray.getBase()` yields, so
+	 * the decoder's own buffer is filled without a Haxe allocation.
+	 */
+	@:native("hxgodot_haxe_file_read")
+	public static function fileRead(handle:Int, out:cpp.RawPointer<cpp.Char>, size:Int):Int;
+
+	/** Moves the handle's read position and returns 0 on success. */
+	@:native("hxgodot_haxe_file_seek")
+	public static function fileSeek(handle:Int, position:haxe.Int64):Int;
+
+	/** Releases a handle returned by `fileOpen`. */
+	@:native("hxgodot_haxe_file_close")
+	public static function fileClose(handle:Int):Void;
+
+	/**
+	 * Creates an engine owned streaming audio stream and returns a handle (0
+	 * on failure). The stream is a real `AudioStream` whose ring is written
+	 * from a decoder's own thread and drained by the audio thread in real
+	 * time, so the sound is not paced by the render loop and only the small
+	 * `targetLength` backlog sits in front of what is being heard.
+	 */
+	@:native("hxgodot_haxe_audio_stream_open")
+	public static function audioStreamOpen(mixRate:Float, bufferLength:Float, targetLength:Float):Int;
+
+	/** Points the `AudioStreamPlayer` with object id `playerId` at the stream. */
+	@:native("hxgodot_haxe_audio_stream_attach")
+	public static function audioStreamAttach(handle:Int, playerId:String):Bool;
+
+	/**
+	 * Writes interleaved signed 16 bit frames into the stream. Called from the
+	 * decoder's audio callback thread; returns the number of frames taken, or a
+	 * negative value when the handle is unknown. `samples` is the byte pointer
+	 * `cpp.NativeArray.getBase()` yields, so no copy is made.
+	 */
+	@:native("hxgodot_haxe_audio_stream_write")
+	public static function audioStreamWrite(handle:Int, samples:cpp.RawPointer<cpp.Char>, frames:Int, channels:Int):Int;
+
+	/** Frames currently queued, i.e. how far the sound trails the decoder. */
+	@:native("hxgodot_haxe_audio_stream_buffered")
+	public static function audioStreamBuffered(handle:Int):Int;
+
+	/** Discards the queue and rebuilds the backlog (a seek, or a new loop). */
+	@:native("hxgodot_haxe_audio_stream_reset")
+	public static function audioStreamReset(handle:Int):Void;
+
+	/**
+	 * A running counter: `which` 0 is dropped frames, 1 is mixes that ran
+	 * short (underruns) and 2 is frames trimmed to bound a runaway backlog.
+	 */
+	@:native("hxgodot_haxe_audio_stream_stat")
+	public static function audioStreamStat(handle:Int, which:Int):Int;
+
+	/** Releases the handle. A player still holding the stream keeps it alive. */
+	@:native("hxgodot_haxe_audio_stream_close")
+	public static function audioStreamClose(handle:Int):Void;
+
+	/**
 	 * Returns the id of the engine object the current script constructor is
 	 * building when `wrapper` is that object, and an empty string otherwise.
 	 * It lets the generated `super()` chain bind the existing node before the

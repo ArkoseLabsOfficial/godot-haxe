@@ -1281,15 +1281,83 @@ RID TextureStorage::texture_create_from_native_handle(RSE::TextureType p_type, I
 }
 
 void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image, int p_layer) {
-	texture_set_data(p_texture, p_image, p_layer);
-
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL(tex);
-	GLES3::Utilities::get_singleton()->texture_resize_data(tex->tex_id, tex->total_data_size);
+
+	// Streamed textures (video frames, animated terrain, ...) are updated every
+	// frame with an image of exactly the shape the texture already has. Writing
+	// that image into the existing storage keeps the allocation and only moves
+	// the pixels; the full upload path allocates and frees the whole texture
+	// store on every frame instead.
+	if (!_texture_2d_update_in_place(tex, p_image, p_layer)) {
+		texture_set_data(p_texture, p_image, p_layer);
+
+		GLES3::Utilities::get_singleton()->texture_resize_data(tex->tex_id, tex->total_data_size);
+	}
 
 #ifdef TOOLS_ENABLED
 	tex->image_cache_2d.unref();
 #endif
+}
+
+bool TextureStorage::_texture_2d_update_in_place(Texture *p_texture, const Ref<Image> &p_image, int p_layer) {
+	// This path cannot reallocate, so everything the full upload would derive
+	// from the image (its size, its format, its mip levels, the layer layout)
+	// has to already match what the texture was created with. Anything that
+	// does not match falls back, and the fallback is always correct.
+	if (!p_texture->active || p_texture->is_render_target || p_texture->is_proxy ||
+			p_texture->is_from_native_handle || p_texture->resize_to_po2) {
+		return false;
+	}
+	if (p_texture->target != GL_TEXTURE_2D || p_layer != 0) {
+		return false;
+	}
+	if (p_texture->compressed || p_texture->mipmaps != 1) {
+		return false;
+	}
+	if (p_image.is_null() || p_image->is_compressed() || p_image->has_mipmaps()) {
+		return false;
+	}
+	if (p_image->get_format() != p_texture->format) {
+		return false;
+	}
+	if (p_image->get_width() != p_texture->width || p_image->get_height() != p_texture->height ||
+			p_texture->width != p_texture->alloc_width || p_texture->height != p_texture->alloc_height) {
+		return false;
+	}
+
+	GLenum type;
+	GLenum format;
+	GLenum internal_format;
+	bool compressed = false;
+	Image::Format real_format;
+	Ref<Image> img = _get_gl_image_and_format(p_image, p_image->get_format(), real_format, format, internal_format, type, compressed, false);
+	// A converted or decompressed image is not the pixel data the texture
+	// already holds, and a differing GL layout cannot be sub-image uploaded
+	// into storage that was allocated for another layout.
+	if (img.is_null() || img != p_image || compressed) {
+		return false;
+	}
+	if (real_format != p_texture->real_format || format != p_texture->gl_format_cache ||
+			internal_format != p_texture->gl_internal_format_cache || type != p_texture->gl_type_cache) {
+		return false;
+	}
+
+	// The same state the full upload leaves behind, so a texture updated either
+	// way is interchangeable.
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, p_texture->tex_id);
+	_texture_set_swizzle(p_texture, real_format);
+	p_texture->gl_set_filter(RSE::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+	p_texture->gl_set_repeat(RSE::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED);
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	// `ptr()` is the const accessor, so the image's storage is not copied on
+	// write here; the pixels go straight from the image to the driver.
+	Vector<uint8_t> read = img->get_data();
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, p_texture->width, p_texture->height, format, type, read.ptr());
+
+	return true;
 }
 
 void TextureStorage::texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) {

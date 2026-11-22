@@ -67,6 +67,10 @@ public:
 	static const char *SETTING_HAXELIB_EXECUTABLE;
 	static const char *SETTING_DEFINES;
 	static const char *SETTING_EXTRA_ARGS;
+	/* `-dce` mode for a project build, so the compiler's dead-code
+	 * elimination is a project decision instead of a constant. Valid values
+	 * are the compiler's own: `full`, `std` and `no`. */
+	static const char *SETTING_DCE;
 	static const char *SETTING_ALLOW_GLOBAL_HAXELIB;
 	static const char *SETTING_BUILD_ON_RUN;
 	static const char *SETTING_DEBUG_SYMBOLS;
@@ -128,6 +132,9 @@ public:
 	static String get_haxelib_executable();
 	static Vector<String> get_defines();
 	static Vector<String> get_extra_args();
+	/* The `-dce` mode the project build uses (`haxe/compiler/dce`), one of
+	 * `full`, `std` or `no`; `full` when the setting is missing or invalid. */
+	static String get_dce();
 	static bool allows_global_haxelib();
 	static bool build_on_run();
 	static bool debug_symbols_enabled(bool p_release);
@@ -221,6 +228,11 @@ public:
 	 * for a class outside the project, which cannot be a script resource). */
 	struct LibraryGlobalClass {
 		String name;
+		/* The library type's fully qualified name (its `package.Name`), the key
+		 * the library index resolves it by. The exported manifest is written
+		 * from it, so a game can rebuild the class description from the empty
+		 * `.hx` stub the exporter ships. */
+		String fq_name;
 		String path;
 		String native_base;
 		bool is_abstract = false;

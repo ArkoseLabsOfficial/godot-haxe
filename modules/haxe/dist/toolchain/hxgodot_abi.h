@@ -49,7 +49,7 @@
 extern "C" {
 #endif
 
-#define HXGODOT_ABI_VERSION 4
+#define HXGODOT_ABI_VERSION 6
 
 #if defined(_WIN32)
 #define HXGODOT_EXPORT __declspec(dllexport)
@@ -279,6 +279,61 @@ typedef struct HxHostApi {
 	 * one boxed `Dynamic` per sample. Returns the number of frames pushed, or
 	 * a negative value on failure (-1 no playback, -2 no data). */
 	int (*push_audio_frames)(int64_t p_playback, const void *p_samples, int p_frames, int p_channels);
+
+	/* Virtual file system. These let a library stream a file through the
+	 * engine's own FileAccess, so entries that only exist inside an exported
+	 * pack (res://) or an encrypted archive can be read by a decoder that
+	 * brings its own I/O (LibVLC, for example) without the whole file ever
+	 * being resident in memory. They are generic: any path FileAccess accepts
+	 * works, and the functions only claim the file exists if FileAccess can
+	 * open it.
+	 *
+	 * `file_open` opens a file for reading, returns a non-zero handle and
+	 * writes the file size in bytes to `r_size`, or -1 when the size is not
+	 * known. It returns 0 when the file cannot be opened. `file_size` returns
+	 * the size of a handle, or -1. `file_read` reads at most `p_size` bytes
+	 * from the handle's current position into `p_out` and returns the number
+	 * of bytes read (0 at end of file), or a negative value on error. The
+	 * position advances by the number of bytes read. `file_seek` moves the
+	 * position and returns 0 on success. `file_close` releases the handle.
+	 *
+	 * Handles are refcounted and safe to use from a thread other than the one
+	 * that opened them; a single handle is not meant to be read from two
+	 * threads at once. */
+	int64_t (*file_open)(const char *p_path, int64_t *r_size);
+	int64_t (*file_size)(int64_t p_handle);
+	int64_t (*file_read)(int64_t p_handle, void *p_out, int64_t p_size);
+	int64_t (*file_seek)(int64_t p_handle, int64_t p_position);
+	void (*file_close)(int64_t p_handle);
+
+	/* Streaming audio for a decoder that hands over samples from its own
+	 * thread, instead of the main loop filling an `AudioStreamGenerator`.
+	 *
+	 * `audio_stream_open` creates the stream and returns a handle (0 on
+	 * failure). `p_mix_rate` is the sample rate of the samples that will be
+	 * written, `p_buffer_len` the seconds the ring can hold and `p_target_len`
+	 * the seconds of backlog the consumer aims for (the latency the sound
+	 * accepts so it does not underrun). `audio_stream_attach` points an
+	 * `AudioStreamPlayer` at the stream and must be called on the main thread,
+	 * before the player is played.
+	 *
+	 * `audio_stream_write` writes interleaved signed 16 bit frames. It is the
+	 * only entry point meant to be called from a non-main thread (the decoder's
+	 * audio callback) and returns the number of frames taken, or a negative
+	 * value when the handle is unknown. It never blocks. `audio_stream_buffered`
+	 * reports the frames queued right now. `audio_stream_reset` discards the
+	 * queue and rebuilds the backlog (a seek, or the start of a loop).
+	 * `audio_stream_stat` reports a running counter: 0 dropped frames, 1 mixes
+	 * that ran short, 2 frames trimmed to bound a runaway backlog.
+	 * `audio_stream_close` releases the handle; a player still holding the
+	 * stream keeps it alive until it is freed. */
+	int64_t (*audio_stream_open)(double p_mix_rate, double p_buffer_len, double p_target_len);
+	int (*audio_stream_attach)(int64_t p_handle, int64_t p_player);
+	int (*audio_stream_write)(int64_t p_handle, const void *p_samples, int p_frames, int p_channels);
+	int64_t (*audio_stream_buffered)(int64_t p_handle);
+	void (*audio_stream_reset)(int64_t p_handle);
+	int64_t (*audio_stream_stat)(int64_t p_handle, int p_which);
+	void (*audio_stream_close)(int64_t p_handle);
 
 } HxHostApi;
 

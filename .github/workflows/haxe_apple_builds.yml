@@ -165,6 +165,10 @@ jobs:
           config/name="haxe_macos_e2e"
           run/main_scene="res://main.tscn"
           config/features=PackedStringArray("4.7")
+
+          [rendering]
+
+          textures/vram_compression/import_etc2_astc=true
           EOF
           cat > /tmp/haxe-macos-e2e/source/Main.hx <<'EOF'
           package;

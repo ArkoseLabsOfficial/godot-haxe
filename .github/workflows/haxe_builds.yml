@@ -277,22 +277,29 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Compilation (template_debug)
-        uses: ./.github/actions/godot-build
-        with:
-          scons-flags: ${{ env.SCONS_FLAGS }} arch=arm64
-          platform: android
-          target: template_debug
-
-      # Both targets share `platform/android/java/lib`, which is a Gradle
-      # module per flavor, so the second target is built after the first one
-      # and before Gradle gathers the libraries.
-      - name: Compilation (template_release)
-        uses: ./.github/actions/godot-build
-        with:
-          scons-flags: ${{ env.SCONS_FLAGS }} arch=arm64
-          platform: android
-          target: template_release
+      # Every ABI Godot's Android exporter can package, not just `arm64-v8a`:
+      # the export job below enables all four, and a template missing one would
+      # fail there with a device that cannot load the engine. SCons keeps a
+      # separate object and `lib/<abi>` directory per arch, so the four are
+      # independent invocations, and Gradle gathers all of them into the APK
+      # (both targets share `platform/android/java/lib`, a Gradle module per
+      # flavor, so the targets are built one after the other).
+      - name: Compilation (templates, all four ABIs)
+        run: |
+          rm -rf editor
+          if [ "${{ github.event.number }}" != "" ]; then
+            export BUILD_NAME="gh-${{ github.event.number }}"
+          else
+            export BUILD_NAME="gh"
+          fi
+          for target in template_debug template_release; do
+            for arch in arm32 arm64 x86_32 x86_64; do
+              echo "===== $target $arch ====="
+              scons platform=android target="$target" arch="$arch" $SCONS_FLAGS \
+                "cache_path=${GITHUB_WORKSPACE}/.scons_cache/" redirect_build_objects=no
+            done
+          done
+          ls -l bin/
 
       - name: Save Godot build cache
         uses: ./.github/actions/godot-cache-save
@@ -330,10 +337,12 @@ jobs:
         run: |
           for apk in bin/android_debug.apk bin/android_release.apk; do
             test -f "$apk"
-            unzip -p "$apk" 'lib/arm64-v8a/libgodot_android.so' > /tmp/libgodot_android.so
-            count=$(grep -ac HaxeScript /tmp/libgodot_android.so || true)
-            echo "HaxeScript markers in $apk: $count"
-            test "$count" -ge 1
+            for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+              unzip -p "$apk" "lib/$abi/libgodot_android.so" > /tmp/libgodot_android.so
+              count=$(grep -ac HaxeScript /tmp/libgodot_android.so || true)
+              echo "HaxeScript markers in $apk lib/$abi: $count"
+              test "$count" -ge 1
+            done
           done
 
       - name: Upload the templates
@@ -668,7 +677,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: 🤖 End-to-end Android export
     needs: [editor-tests, android-templates]
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -744,6 +753,10 @@ jobs:
           config/name="haxe_android_e2e"
           run/main_scene="res://main.tscn"
           config/features=PackedStringArray("4.7")
+
+          [rendering]
+
+          textures/vram_compression/import_etc2_astc=true
           EOF
           cat > /tmp/haxe-android-e2e/source/Main.hx <<'EOF'
           package;
@@ -781,10 +794,10 @@ jobs:
           [preset.0.options]
 
           gradle_build/use_gradle_build=false
-          architectures/armeabi-v7a=false
+          architectures/armeabi-v7a=true
           architectures/arm64-v8a=true
-          architectures/x86=false
-          architectures/x86_64=false
+          architectures/x86=true
+          architectures/x86_64=true
           version/code=1
           version/name="1.0"
           package/unique_name="com.example.haxee2e"
@@ -816,8 +829,12 @@ jobs:
       - name: Verify the APK contains the Haxe library and manifest
         run: |
           apk=/tmp/haxe-android-e2e/Game.apk
-          # One native library per enabled ABI, under the name the game opens.
-          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libhaxe_android_e2e.so'
+          # One native library per enabled ABI, under the name the game opens,
+          # and each one of the architecture its directory names.
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            unzip -p "$apk" "lib/$abi/libhaxe_android_e2e.so" > /tmp/libhaxe_android_e2e.so
+            file /tmp/libhaxe_android_e2e.so
+          done
           # The class metadata the exported game attaches scripts from.
           unzip -p "$apk" assets/haxe/scripts.json | head -c 16
           echo

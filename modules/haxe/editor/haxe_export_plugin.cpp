@@ -30,6 +30,7 @@
 
 #include "haxe_export_plugin.h"
 
+#include "../haxe_abi.h"
 #include "../haxe_build.h"
 #include "../haxe_project.h"
 
@@ -41,11 +42,88 @@
 #include "core/string/translation.h"
 #include "core/version.h"
 #include "editor/editor_node.h"
+#include "editor/export/editor_export_platform.h"
+#include "editor/export/editor_export_preset.h"
 #include "editor/export/export_template_manager.h"
 #include "editor/file_system/editor_paths.h"
 #include "editor/settings/editor_settings.h"
 
 #include <cstring>
+
+/* Export-preset keys of the Haxe section. They are read back in
+ * `_export_begin()` and turned into `HaxeBuild::Options`. */
+static const char *const HAXE_OPTION_DCE = "haxe/dce";
+static const char *const HAXE_OPTION_DEFINES = "haxe/defines";
+static const char *const HAXE_OPTION_ARGUMENTS = "haxe/extra_arguments";
+
+namespace {
+
+/* Reads a preset option that should be a list of strings. The editor stores a
+ * `PackedStringArray`, but a hand-edited preset file can hold an `Array` or a
+ * single comma-separated `String`; all three mean the same thing. */
+Vector<String> haxe_preset_string_list(const Variant &p_value) {
+	Vector<String> result;
+	switch (p_value.get_type()) {
+		case Variant::PACKED_STRING_ARRAY: {
+			for (const String &item : PackedStringArray(p_value)) {
+				result.push_back(item);
+			}
+		} break;
+		case Variant::ARRAY: {
+			for (const Variant &item : Array(p_value)) {
+				result.push_back(String(item));
+			}
+		} break;
+		case Variant::STRING: {
+			for (const String &item : String(p_value).split(",")) {
+				result.push_back(item);
+			}
+		} break;
+		default:
+			break;
+	}
+	return result;
+}
+
+/* The compiler configuration this preset asks for, layered on the project
+ * settings by `HaxeBuild::Options`. An index of 0 means "leave it to the
+ * project", so a preset that never touched the section is a pure pass-through. */
+HaxeBuild::Options haxe_options_from_preset(const Ref<EditorExportPreset> &p_preset) {
+	HaxeBuild::Options options;
+	if (p_preset.is_null()) {
+		return options;
+	}
+	// 0 = project default, 1 = full, 2 = std, 3 = no (see
+	// `_get_export_options`).
+	if (p_preset->has(HAXE_OPTION_DCE)) {
+		switch ((int)p_preset->get(HAXE_OPTION_DCE)) {
+			case 1:
+				options.dce = "full";
+				break;
+			case 2:
+				options.dce = "std";
+				break;
+			case 3:
+				options.dce = "no";
+				break;
+			default:
+				break;
+		}
+	}
+	if (p_preset->has(HAXE_OPTION_DEFINES)) {
+		for (const String &define : haxe_preset_string_list(p_preset->get(HAXE_OPTION_DEFINES))) {
+			options.defines.push_back(define);
+		}
+	}
+	if (p_preset->has(HAXE_OPTION_ARGUMENTS)) {
+		for (const String &argument : haxe_preset_string_list(p_preset->get(HAXE_OPTION_ARGUMENTS))) {
+			options.arguments.push_back(argument);
+		}
+	}
+	return options;
+}
+
+} // namespace
 
 namespace {
 
@@ -394,6 +472,29 @@ String format_build_errors(const HaxeBuild::Result &p_result) {
 	return HaxeBuild::format_errors(p_result);
 }
 
+/* Checks that an export template was built for the same host API version as this
+ * editor. The library this export compiles installs the editor's host API
+ * version, and the template's engine refuses a library built for another one, so
+ * a template from an older engine would produce a game that fails on every start
+ * with "incompatible host API version". Refusing the export here turns that into
+ * a message that names the cause. A Haxe template built before the marker existed
+ * cannot be identified and only warns. */
+bool check_template_host_abi(const Ref<EditorExportPlatform> &p_platform, const String &p_template_path, const String &p_what) {
+	if (HaxeExportPlugin::template_host_abi_matches(p_template_path)) {
+		return true;
+	}
+	if (HaxeExportPlugin::template_declares_host_abi(p_template_path)) {
+		p_platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_ERROR, TTR("Haxe"),
+				vformat("The %s export template '%s' was built for a different host API version than this editor (%d). The compiled Haxe library and the engine that loads it have to come from the same build, so the game would fail with 'incompatible host API version'. Rebuild the export templates from this engine and select them again.",
+						p_what, p_template_path, (int)HXGODOT_ABI_VERSION));
+		return false;
+	}
+	p_platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_WARNING, TTR("Haxe"),
+			vformat("Could not confirm that the %s export template '%s' was built for this editor's host API version (%d). If the game reports 'incompatible host API version', rebuild the export templates from this engine.",
+					p_what, p_template_path, (int)HXGODOT_ABI_VERSION));
+	return true;
+}
+
 } // namespace
 
 String HaxeExportPlugin::get_name() const {
@@ -402,6 +503,14 @@ String HaxeExportPlugin::get_name() const {
 
 bool HaxeExportPlugin::template_contains_haxe(const String &p_path) {
 	return path_contains_marker(p_path, HAXE_TEMPLATE_MARKER);
+}
+
+bool HaxeExportPlugin::template_host_abi_matches(const String &p_path) {
+	return path_contains_marker(p_path, HXGODOT_TEMPLATE_ABI_MARKER);
+}
+
+bool HaxeExportPlugin::template_declares_host_abi(const String &p_path) {
+	return path_contains_marker(p_path, "hxgodot-abi=");
 }
 
 int HaxeExportPlugin::web_template_threads(const String &p_path) {
@@ -460,6 +569,61 @@ int HaxeExportPlugin::web_template_threads(const String &p_path) {
 	return result;
 }
 
+void HaxeExportPlugin::_get_export_options(const Ref<EditorExportPlatform> &p_export_platform, List<EditorExportPlatform::ExportOption> *r_options) const {
+	(void)p_export_platform;
+	// A project with no Haxe source and no library class has nothing for these
+	// options to affect; keeping them out of its export dialog avoids
+	// advertising a compiler configuration that is never used.
+	if (HaxeProject::scan_sources().is_empty() && HaxeProject::get_library_global_classes().is_empty()) {
+		return;
+	}
+
+	r_options->push_back(EditorExportPlatform::ExportOption(
+			PropertyInfo(Variant::INT, HAXE_OPTION_DCE, PROPERTY_HINT_ENUM,
+					"Project default (see Project Settings),full,std,no"),
+			0));
+	r_options->push_back(EditorExportPlatform::ExportOption(
+			PropertyInfo(Variant::PACKED_STRING_ARRAY, HAXE_OPTION_DEFINES, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT),
+			PackedStringArray()));
+	r_options->push_back(EditorExportPlatform::ExportOption(
+			PropertyInfo(Variant::PACKED_STRING_ARRAY, HAXE_OPTION_ARGUMENTS, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT),
+			PackedStringArray()));
+}
+
+String HaxeExportPlugin::_get_export_option_warning(const Ref<EditorExportPlatform> &p_export_platform, const String &p_option_name) const {
+	(void)p_export_platform;
+	const Ref<EditorExportPreset> preset = get_export_preset();
+	if (preset.is_null() || !preset->has(p_option_name)) {
+		return String();
+	}
+	if (p_option_name == HAXE_OPTION_DEFINES) {
+		for (const String &define : haxe_preset_string_list(preset->get(p_option_name))) {
+			const String trimmed = define.strip_edges();
+			if (trimmed.is_empty()) {
+				continue;
+			}
+			if (trimmed.contains(" ") || trimmed.contains("\t")) {
+				return vformat("The Haxe define '%s' contains whitespace. A define is a single `name` or `name=value` token.", trimmed);
+			}
+			if (trimmed.begins_with("-")) {
+				return vformat("The Haxe define '%s' starts with '-'; enter only the define name (for example 'RELEASE'), not the `-D` flag. Use the extra arguments option for raw compiler flags.", trimmed);
+			}
+		}
+	} else if (p_option_name == HAXE_OPTION_ARGUMENTS) {
+		for (const String &argument : haxe_preset_string_list(preset->get(p_option_name))) {
+			if (argument.strip_edges().is_empty()) {
+				return "An empty raw compiler argument was given; remove it or fill it in.";
+			}
+		}
+	} else if (p_option_name == HAXE_OPTION_DCE) {
+		const int mode = (int)preset->get(p_option_name);
+		if (mode < 0 || mode > 3) {
+			return vformat("Unknown dead-code elimination mode %d; choose \"Project default\", \"full\", \"std\" or \"no\".", mode);
+		}
+	}
+	return String();
+}
+
 void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_debug, const String &p_path, int p_flags) {
 	(void)p_features;
 	(void)p_path;
@@ -482,6 +646,11 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 		}
 		HaxeBuild::set_runtime_features(features);
 	}
+	// This preset's compiler configuration (its "Haxe" section). It layers on
+	// the project settings, and it is what the build stamp records, so a
+	// preset with different options compiles its own library instead of
+	// reusing the editor's.
+	const HaxeBuild::Options build_options = haxe_options_from_preset(feature_preset);
 
 	Ref<EditorExportPlatform> platform = get_export_platform();
 	if (platform.is_null()) {
@@ -489,8 +658,10 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 	}
 
 	// A project without Haxe sources is not this module's business; leaving it
-	// alone keeps an ordinary Godot project exporting exactly as before.
-	if (HaxeProject::scan_sources().is_empty()) {
+	// alone keeps an ordinary Godot project exporting exactly as before. A
+	// script from an installed haxelib counts too: a scene can reference a
+	// library class without the project having any source of its own.
+	if (HaxeProject::scan_sources().is_empty() && HaxeProject::get_library_global_classes().is_empty()) {
 		return;
 	}
 
@@ -547,10 +718,14 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 			// The engine library lives in an AAR inside the installed build
 			// template. If it cannot be identified, the export continues with a
 			// warning rather than guessing; the user is told what to do.
-			if (!template_contains_haxe(build_directory.path_join("app").path_join("libs")) &&
-					!template_contains_haxe(build_directory.path_join("libs"))) {
+			const String app_libs = build_directory.path_join("app").path_join("libs");
+			const String libs = build_directory.path_join("libs");
+			const bool app_has_haxe = template_contains_haxe(app_libs);
+			if (!app_has_haxe && !template_contains_haxe(libs)) {
 				platform->add_message(EditorExportPlatform::EXPORT_MESSAGE_WARNING, TTR("Haxe"),
 						TTR("Could not confirm that the Android build template contains the Haxe module. If the game reports that Haxe scripts cannot be loaded, rebuild the Android build template from this engine (Project > Install Android Build Template)."));
+			} else if (!check_template_host_abi(platform, app_has_haxe ? app_libs : libs, "Android build")) {
+				return;
 			}
 		} else {
 			if (template_path.strip_edges().is_empty()) {
@@ -572,6 +747,9 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 						vformat("The export template '%s' was not built with the Haxe module, so the exported game could not load Haxe scripts. "
 								"Build an Android template from this engine and set it as the preset's custom template.",
 								template_path));
+				return;
+			}
+			if (!check_template_host_abi(platform, template_path, "Android")) {
 				return;
 			}
 		}
@@ -654,6 +832,9 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 							template_path));
 			return;
 		}
+		if (!check_template_host_abi(platform, template_path, "web")) {
+			return;
+		}
 		// hxcpp 4.3.2 added `setlocale(LC_ALL, "")` to its library bootstrap, so
 		// a Haxe library built by it imports `setlocale` from the host page where
 		// 4.3.0 only called `setlocale(LC_NUMERIC, "C")`. The runtime module
@@ -694,6 +875,9 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 							template_path));
 			return;
 		}
+		if (!check_template_host_abi(platform, template_path, "host")) {
+			return;
+		}
 	}
 
 	// The game library (no editor-only classes) is what an exported game
@@ -707,7 +891,7 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 	if (android) {
 		for (const String &abi : abis) {
 			build_progress.step(vformat(TTR("Compiling the Haxe library for Android %s..."), abi), build_step++);
-			HaxeBuild::Result result = HaxeBuild::build(release, false, false, abi, ndk_root);
+			HaxeBuild::Result result = HaxeBuild::build(release, false, false, abi, ndk_root, build_options);
 			if (!result.success) {
 				String message = vformat("The Haxe project could not be compiled for Android %s, so the exported game cannot run its scripts.\n%s", abi, result.message);
 				String errors = format_build_errors(result);
@@ -752,7 +936,7 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 		}
 	} else if (web) {
 		build_progress.step(TTR("Compiling the Haxe library for the web..."), build_step++);
-		HaxeBuild::Result result = HaxeBuild::build(release, false, false, web_target);
+		HaxeBuild::Result result = HaxeBuild::build(release, false, false, web_target, String(), build_options);
 		if (!result.success) {
 			String message = vformat("The Haxe project could not be compiled for the web, so the exported game cannot run its scripts.\n%s", result.message);
 			String errors = format_build_errors(result);
@@ -775,7 +959,7 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 				vformat("Packaged the compiled Haxe library for the web ('%s').", result.library_path.get_file()));
 	} else {
 		build_progress.step(TTR("Compiling the Haxe library..."), build_step++);
-		HaxeBuild::Result result = HaxeBuild::build(release, false, false);
+		HaxeBuild::Result result = HaxeBuild::build(release, false, false, String(), String(), build_options);
 		if (!result.success) {
 			String message = vformat("The Haxe project could not be compiled, so the exported game cannot run its scripts.\n%s", result.message);
 			String errors = format_build_errors(result);
@@ -811,6 +995,21 @@ void HaxeExportPlugin::_export_begin(const HashSet<String> &p_features, bool p_d
 	// shipping the source.
 	add_file(HaxeProject::get_packaged_metadata_path(), HaxeProject::serialize_script_metadata().to_utf8_buffer(), false);
 	metadata_packaged = true;
+
+	// A library global class is a script the same way a project script is, but
+	// its source lives in the project `haxelib/` directory, which is
+	// `.gdignore`d. The per-file exporter therefore never sees it, so its stub
+	// is added here: a scene that references `res://haxelib/.../Name.hx` finds
+	// an empty resource, and `HaxeScript::load_source_code()` resolves it from
+	// the manifest above (exactly like a project script's stub). The manifest
+	// entry for each library class is written by `serialize_script_metadata()`.
+	const Vector<HaxeProject::LibraryGlobalClass> library_classes = HaxeProject::get_library_global_classes();
+	for (const HaxeProject::LibraryGlobalClass &library : library_classes) {
+		if (!library.path.begins_with("res://")) {
+			continue;
+		}
+		add_file(library.path, String("\n").to_utf8_buffer(), false);
+	}
 }
 
 void HaxeExportPlugin::_export_file(const String &p_path, const String &p_type, const HashSet<String> &p_features) {

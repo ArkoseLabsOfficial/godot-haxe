@@ -31,6 +31,7 @@
 #include "haxe_build.h"
 
 #include "haxe_gdscript.h"
+#include "haxe_library_index.h"
 #include "haxe_project.h"
 #include "haxe_runtime.h"
 
@@ -40,6 +41,7 @@
 #include "core/io/json.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
+#include "core/templates/hash_set.h"
 #include "core/version.h"
 
 #ifdef TOOLS_ENABLED
@@ -323,12 +325,58 @@ Error run_process(const String &p_executable, const List<String> &p_arguments, S
 	return error;
 }
 
+#ifdef WINDOWS_ENABLED
+/* `CreateProcessW` receives a single command line, and Godot's
+ * `_quote_command_line_argument()` only wraps an argument that contains a
+ * special character in double quotes; it does not escape the double quotes
+ * already inside that argument. A Haxe option may contain them: a library's
+ * `extraParams.hxml` carries
+ *   --macro haxe.macro.Compiler.define("libhxcpp","6.0.0")
+ * so the child's C runtime sees those quotes as the end of the argument and
+ * the compiler reports
+ *   Could not parse haxe.macro.Compiler.define(libhxcpp,6.0.0)
+ * Writing the options to an `.hxml` file and running `haxe <file>.hxml` avoids
+ * the command line entirely: the compiler reads and tokenizes the file itself,
+ * exactly as it reads a library's `extraParams.hxml`. */
+bool compiler_arguments_need_hxml_file(const List<String> &p_arguments) {
+	for (const String &argument : p_arguments) {
+		if (argument.contains("\"")) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 /* Resolves the command that runs the Haxe compiler. Every path handed to the
  * compiler is absolute, so changing the working directory does not change the
  * result; leaving the project directory avoids the shadowing described above. */
 void resolve_haxe_command(const List<String> &p_arguments, String &r_executable, List<String> &r_arguments) {
 	r_executable = HaxeProject::get_haxe_executable();
 	r_arguments = p_arguments;
+#ifdef WINDOWS_ENABLED
+	if (compiler_arguments_need_hxml_file(p_arguments)) {
+		// The file lives next to the class path aliases, in the module's
+		// transient state directory and under the same per-process
+		// subdirectory the Unix launcher uses, so two concurrently building
+		// editors cannot overwrite each other's options. A directory that
+		// cannot hold the file (or is not available) leaves the plain argument
+		// list, which is no worse than before.
+		String work_dir = compiler_state_dir("work", "haxe_work");
+		if (!work_dir.is_empty()) {
+			Ref<DirAccess> cwd_access = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+			String cwd = cwd_access.is_valid() ? cwd_access->get_current_dir() : String();
+			work_dir = work_dir.path_join(cwd.md5_text().substr(0, 12));
+			DirAccess::make_dir_recursive_absolute(work_dir);
+			const String hxml_path = work_dir.path_join("arguments.hxml");
+			if (write_if_changed(hxml_path, HaxeBuild::serialize_hxml_arguments(p_arguments))) {
+				r_executable = HaxeProject::get_haxe_executable();
+				r_arguments.clear();
+				r_arguments.push_back(hxml_path);
+			}
+		}
+	}
+#endif
 #ifdef UNIX_ENABLED
 	Ref<DirAccess> cwd_access = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 	String cwd = cwd_access.is_valid() ? cwd_access->get_current_dir() : String();
@@ -634,6 +682,33 @@ void append_extra_argument(Vector<String> &r_arguments, const String &p_argument
 
 } // namespace
 
+/* The `HXGODOT_ABI_VERSION` the toolchain header declares, or -1 when the header
+ * is missing or does not define it. Every project library compiles this header
+ * into its glue, and the version it installs has to equal the engine's or the
+ * game refuses to load the library ("incompatible host API version"). A
+ * developer build reads the toolchain live from `modules/haxe/dist`, so the
+ * declared value can differ from the engine's compiled-in one. */
+int HaxeBuild::read_toolchain_abi_version(const String &p_toolchain_dir) {
+	if (p_toolchain_dir.is_empty()) {
+		return -1;
+	}
+	Ref<FileAccess> file = FileAccess::open(p_toolchain_dir.path_join("hxgodot_abi.h"), FileAccess::READ);
+	if (file.is_null()) {
+		return -1;
+	}
+	while (!file->eof_reached()) {
+		const String line = file->get_line().strip_edges();
+		if (!line.begins_with("#define")) {
+			continue;
+		}
+		const PackedStringArray parts = line.split(" ", false);
+		if (parts.size() >= 3 && parts[1] == "HXGODOT_ABI_VERSION") {
+			return parts[2].to_int();
+		}
+	}
+	return -1;
+}
+
 void HaxeBuild::set_runtime_features(const Vector<String> &p_features) {
 	runtime_features = p_features;
 }
@@ -790,6 +865,37 @@ Vector<String> HaxeBuild::parse_extra_params(const String &p_contents) {
 		arguments.push_back(token);
 	}
 	return arguments;
+}
+
+/* The inverse of `parse_extra_params`: turns an argument list back into the
+ * text of an `.hxml` file the compiler reads the same way.
+ *
+ * Godot cannot hand an argument that contains a double quote to a Windows
+ * child process intact (see `resolve_haxe_command`), so such a build writes
+ * its options to a file instead. One option per line, and a token that
+ * contains whitespace or would start a comment is appended to the previous
+ * line, so the loader's "split at the first space" reconstructs the list
+ * unchanged. */
+String HaxeBuild::serialize_hxml_arguments(const List<String> &p_arguments) {
+	String text;
+	bool line_open = false;
+	for (const String &argument : p_arguments) {
+		const bool own_line = !argument.is_empty() && !argument.contains(" ") &&
+				!argument.contains("\t") && !argument.contains("\n") && !argument.begins_with("#");
+		if (line_open && !own_line) {
+			text += " " + argument;
+			continue;
+		}
+		if (line_open) {
+			text += "\n";
+		}
+		text += argument;
+		line_open = true;
+	}
+	if (line_open) {
+		text += "\n";
+	}
+	return text;
 }
 
 String HaxeBuild::get_last_build_log() {
@@ -1070,20 +1176,37 @@ void HaxeBuild::list_installed_libraries(Vector<Library> &r_libraries) {
 	}
 }
 
-String HaxeBuild::generate_boot_class(const Vector<HaxeClassInfo> &p_classes) {
+String HaxeBuild::generate_boot_class(const Vector<HaxeClassInfo> &p_classes, const Vector<String> &p_library_classes) {
 	String source = "// Generated by the Godot Haxe module. Do not edit.\n";
 	source += "// References every project script class so hxcpp keeps them alive.\n\n";
 	source += "class __HaxeGodotBoot {\n";
-	if (p_classes.is_empty()) {
+	// The names to reference: every project class, plus the library global
+	// classes a scene can attach (see the header). A project and a library class
+	// can share a name, so the set is deduplicated and keeps the project's entry.
+	Vector<String> names;
+	HashSet<String> seen;
+	for (const HaxeClassInfo &info : p_classes) {
+		// Every project class is referenced, tool classes included: the
+		// scene files can attach them in the game as well as the editor.
+		if (info.name.is_empty() || info.is_abstract || seen.has(info.fq_name)) {
+			continue;
+		}
+		seen.insert(info.fq_name);
+		names.push_back(info.fq_name);
+	}
+	for (const String &library_class : p_library_classes) {
+		if (library_class.is_empty() || seen.has(library_class)) {
+			continue;
+		}
+		seen.insert(library_class);
+		names.push_back(library_class);
+	}
+	if (names.is_empty()) {
 		source += "\tstatic var __classes:Array<Dynamic> = [];\n";
 	} else {
 		source += "\tstatic var __classes:Array<Dynamic> = [\n";
-		for (const HaxeClassInfo &info : p_classes) {
-			// Every project class is referenced, tool classes included: the
-			// scene files can attach them in the game as well as the editor.
-			if (!info.name.is_empty() && !info.is_abstract) {
-				source += "\t\t" + info.fq_name + ",\n";
-			}
+		for (const String &name : names) {
+			source += "\t\t" + name + ",\n";
 		}
 		source += "\t];\n";
 	}
@@ -1266,7 +1389,51 @@ String HaxeBuild::library_edit_signature(const String &p_class_path) {
 	return vformat("%d:%d:%d", (int64_t)newest, files, bytes);
 }
 
-String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi) {
+HaxeBuild::Options HaxeBuild::Options::resolved() const {
+	Options result;
+	result.dce = dce.strip_edges().to_lower();
+	// An empty or unknown mode means the project decides. The export plugin
+	// rejects an unknown preset value in the dialog; this keeps a stale or
+	// hand-edited preset from producing a compiler error on every build.
+	if (result.dce != "full" && result.dce != "std" && result.dce != "no") {
+		result.dce = HaxeProject::get_dce();
+	}
+	for (const String &define : defines) {
+		if (!define.strip_edges().is_empty()) {
+			result.defines.push_back(define.strip_edges());
+		}
+	}
+	for (const String &argument : arguments) {
+		if (!argument.strip_edges().is_empty()) {
+			result.arguments.push_back(argument.strip_edges());
+		}
+	}
+	return result;
+}
+
+bool HaxeBuild::Options::is_default() const {
+	const Options resolved_options = resolved();
+	return resolved_options.dce == HaxeProject::get_dce() && resolved_options.defines.is_empty() && resolved_options.arguments.is_empty();
+}
+
+Vector<String> HaxeBuild::options_arguments(const Options &p_options) {
+	const Options resolved_options = p_options.resolved();
+	Vector<String> arguments;
+	arguments.push_back("-dce");
+	arguments.push_back(resolved_options.dce);
+	for (const String &define : resolved_options.defines) {
+		arguments.push_back("-D");
+		arguments.push_back(define);
+	}
+	// Raw arguments go last so a preset can undo anything, including a define
+	// or the dead-code mode, when it needs to.
+	for (const String &argument : resolved_options.arguments) {
+		arguments.push_back(argument);
+	}
+	return arguments;
+}
+
+String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi, const Options &p_options) {
 	Vector<String> lines;
 	lines.push_back(vformat("config=%s", p_release ? "release" : "debug"));
 	lines.push_back(vformat("target=%s", p_editor ? "editor" : "game"));
@@ -1277,7 +1444,7 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	lines.push_back(vformat("project=%s", HaxeProject::get_project_root()));
 	// Bumped whenever the module changes which classes or members a library
 	// contains, so that projects pick the change up without a manual Rebuild.
-	lines.push_back("module=5");
+	lines.push_back("module=7");
 
 	Vector<String> sources = HaxeProject::scan_sources();
 	for (const String &source : sources) {
@@ -1317,6 +1484,21 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	for (const String &argument : HaxeProject::get_extra_args()) {
 		lines.push_back("arg=" + argument);
 	}
+	{
+		// The compiler configuration an export preset layered on top of the
+		// project settings. It changes the produced library (different
+		// dead-code elimination, different defines), so it is part of the
+		// build identity: without it a preset change would reuse the library
+		// the previous options produced.
+		const Options resolved = p_options.resolved();
+		lines.push_back("dce=" + resolved.dce);
+		for (const String &define : resolved.defines) {
+			lines.push_back("option-define=" + define);
+		}
+		for (const String &argument : resolved.arguments) {
+			lines.push_back("option-arg=" + argument);
+		}
+	}
 
 	// The web library is compiled by whichever `emcc` the toolchain check
 	// resolves, and a library built by another Emscripten is not interchangeable
@@ -1338,6 +1520,18 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	String native_dir = HaxeRuntime::get_singleton()->get_toolchain_dir();
 	lines.push_back("stdlib=" + stdlib);
 	lines.push_back("native=" + native_dir);
+	// Every project library compiles the native glue in `dist/toolchain` and
+	// installs a host API whose version must equal the engine's
+	// (`HXGODOT_ABI_VERSION`). The engine refuses a library built for another
+	// version with "incompatible host API version" at start-up, so bumping the
+	// constant invalidates every existing library: both the version and a
+	// signature of the toolchain files the compiler reads take part in the build
+	// identity. Without the version a project keeps re-exporting a stale library
+	// after the engine changed, and the exported game fails on every start.
+	lines.push_back(vformat("host-abi=%d", (int)HXGODOT_ABI_VERSION));
+	if (!native_dir.is_empty()) {
+		lines.push_back("native-sig=" + library_edit_signature(native_dir));
+	}
 	lines.push_back("debug_symbols=" + String(HaxeProject::debug_symbols_enabled(p_release) ? "1" : "0"));
 
 	String joined;
@@ -1347,11 +1541,11 @@ String HaxeBuild::build_stamp(bool p_release, bool p_editor, const String &p_abi
 	return joined.md5_text() + vformat(":%d", joined.length());
 }
 
-String HaxeBuild::current_stamp(bool p_release, bool p_editor, const String &p_abi) {
-	return build_stamp(p_release, p_editor, p_abi);
+String HaxeBuild::current_stamp(bool p_release, bool p_editor, const String &p_abi, const Options &p_options) {
+	return build_stamp(p_release, p_editor, p_abi, p_options);
 }
 
-bool HaxeBuild::is_build_required(bool p_release, bool p_editor, const String &p_abi) {
+bool HaxeBuild::is_build_required(bool p_release, bool p_editor, const String &p_abi, const Options &p_options) {
 	String stamp_path = HaxeProject::get_config_dir(p_release, p_editor, p_abi).path_join(".stamp");
 	if (!FileAccess::exists(stamp_path)) {
 		return true;
@@ -1361,7 +1555,7 @@ bool HaxeBuild::is_build_required(bool p_release, bool p_editor, const String &p
 		return true;
 	}
 	String stamp = file->get_as_utf8_string().strip_edges();
-	String expected = build_stamp(p_release, p_editor, p_abi);
+	String expected = build_stamp(p_release, p_editor, p_abi, p_options);
 	return stamp != expected || !FileAccess::exists(HaxeProject::get_versioned_library_path(p_release, p_editor, expected, p_abi));
 }
 
@@ -1869,7 +2063,7 @@ void HaxeBuild::register_web_editor_settings() {
 }
 #endif
 
-Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const Vector<Library> &p_libraries, const Vector<HaxeClassInfo> &p_script_classes, Vector<Pair<String, String>> &r_class_path_aliases, const String &p_abi, const String &p_ndk_root) {
+Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const Vector<Library> &p_libraries, const Vector<HaxeClassInfo> &p_script_classes, Vector<Pair<String, String>> &r_class_path_aliases, const String &p_abi, const String &p_ndk_root, const Options &p_options) {
 	ClassPathAlias alias;
 	Vector<String> arguments;
 	arguments.push_back("-cp");
@@ -1967,19 +2161,25 @@ Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const
 	// A class from an installed haxelib can be a script class too when it
 	// ultimately extends a Godot type (`hxvlc.godot.Video` is a `Sprite2D`). The
 	// engine reaches its members by name just like a project script's, so the
-	// fields of each such class are kept. Only the fields are marked, not the
-	// class: a library class that no project code uses is still dead code and
-	// is removed, while a used one keeps the `@:export` members the Inspector
+	// fields of each such class are kept. A plain library script class stays
+	// fields-only: a class that no project code uses is still dead code and is
+	// removed, while a used one keeps the `@:export` members the Inspector
 	// reads and the overrides (`_ready`, `_process`, ...) the engine calls.
+	// A library `@:globalClass`, however, is offered as an attachable script
+	// (the Create Node dialog, and therefore a saved scene), so a game has to
+	// instantiate it from the native library even when no project code says
+	// `new`. That is invisible to `-dce full`, so its type is kept too.
 	// `recursive` is on because a field's dot-path is `<type>.<field>`; an exact
 	// match on the type name would match the type, not its fields.
-	for (const String &type_name : HaxeProject::get_library_script_classes()) {
-		arguments.push_back("--macro");
-		arguments.push_back(vformat("addGlobalMetadata('%s', '@:keep', true, false, true)", type_name));
+	HashSet<String> library_global_names;
+	for (const HaxeProject::LibraryGlobalClass &global_class : HaxeProject::get_library_global_classes()) {
+		library_global_names.insert(global_class.fq_name);
 	}
-	arguments.push_back("-dce");
-	arguments.push_back("full");
-
+	for (const String &type_name : HaxeProject::get_library_script_classes()) {
+		const bool keep_type = library_global_names.has(type_name);
+		arguments.push_back("--macro");
+		arguments.push_back(vformat("addGlobalMetadata('%s', '@:keep', true, %s, true)", type_name, keep_type ? "true" : "false"));
+	}
 	for (const String &define : HaxeProject::get_defines()) {
 		arguments.push_back("-D");
 		arguments.push_back(define);
@@ -1994,6 +2194,12 @@ Vector<String> HaxeBuild::collect_arguments(bool p_release, bool p_editor, const
 		}
 	}
 	for (const String &argument : HaxeBuild::normalize_extra_arguments(HaxeProject::get_extra_args())) {
+		arguments.push_back(argument);
+	}
+	// The compiler configuration of this build (dead-code elimination and the
+	// export preset's extra defines/arguments) goes last, so it can override a
+	// project default.
+	for (const String &argument : options_arguments(p_options)) {
 		arguments.push_back(argument);
 	}
 	alias.append_mappings(r_class_path_aliases);
@@ -2078,9 +2284,9 @@ void HaxeBuild::parse_diagnostics(const String &p_output, const Vector<Pair<Stri
 	}
 }
 
-HaxeBuild::Result HaxeBuild::build(bool p_release, bool p_editor, bool p_force, const String &p_abi, const String &p_ndk_root) {
+HaxeBuild::Result HaxeBuild::build(bool p_release, bool p_editor, bool p_force, const String &p_abi, const String &p_ndk_root, const Options &p_options) {
 	HaxeBuildSession session;
-	session.start(p_release, p_editor, p_force, p_abi, p_ndk_root);
+	session.start(p_release, p_editor, p_force, p_abi, p_ndk_root, p_options);
 	while (session.is_running()) {
 		session.poll();
 		// The compiler runs in its own process; sleeping here only saves CPU.
@@ -2095,9 +2301,12 @@ HaxeBuildSession::~HaxeBuildSession() {
 	}
 }
 
-void HaxeBuildSession::start(bool p_release, bool p_editor, bool p_force, const String &p_abi, const String &p_ndk_root) {
+void HaxeBuildSession::start(bool p_release, bool p_editor, bool p_force, const String &p_abi, const String &p_ndk_root, const HaxeBuild::Options &p_options) {
 	abi = p_abi;
 	ndk_root = p_ndk_root;
+	// Resolve once, so the stamp and the compiler arguments cannot disagree
+	// and a project setting changed mid-build does not leak in.
+	options = p_options.resolved();
 	prepare(p_release, p_editor, p_force);
 }
 
@@ -2117,6 +2326,21 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 	}
 	if (HaxeProject::get_source_dir().is_empty()) {
 		result = HaxeBuild::Result::failed("The Haxe source directory is not configured.");
+		finished = true;
+		return;
+	}
+
+	// The native glue a project library compiles must install the same host API
+	// version as this engine, or the game refuses to load the library
+	// ("incompatible host API version"). A developer build reads the toolchain
+	// live from `modules/haxe/dist`, so editing `hxgodot_abi.h` without
+	// rebuilding the engine would compile a library this engine cannot load.
+	// Refuse it here, with the two versions, instead of shipping a broken game.
+	const String toolchain_dir = HaxeRuntime::get_singleton()->get_toolchain_dir();
+	const int toolchain_abi = HaxeBuild::read_toolchain_abi_version(toolchain_dir);
+	if (toolchain_abi >= 0 && toolchain_abi != HXGODOT_ABI_VERSION) {
+		result = HaxeBuild::Result::failed(vformat("The Haxe toolchain in '%s' declares host API version %d, but this engine provides %d. The toolchain and the engine have to come from the same build; rebuild the engine and its export templates.", toolchain_dir, toolchain_abi, (int)HXGODOT_ABI_VERSION));
+		last_build_log = result.message;
 		finished = true;
 		return;
 	}
@@ -2209,7 +2433,36 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 		}
 	}
 
-	String boot_source = HaxeBuild::generate_boot_class(script_classes);
+	// A library `@:globalClass` is attachable through the editor, so a scene can
+	// name one without any project code doing so. Such a type is invisible to
+	// `-dce full`: the boot module references it (see `generate_boot_class`) so
+	// it is typed, and `collect_arguments()` marks it `@:keep` so it survives.
+	// Only a class whose source is on a class path the build resolves is
+	// referenced; naming a type the compiler cannot find would fail the build
+	// instead of quietly leaving a script out.
+	HashSet<String> resolved_class_paths;
+	for (const HaxeBuild::Library &library : libraries) {
+		if (!library.class_path.is_empty()) {
+			resolved_class_paths.insert(library.class_path.simplify_path());
+		}
+	}
+	Vector<String> library_boot_classes;
+	HaxeLibraryIndex *library_index = HaxeLibraryIndex::get_singleton();
+	for (const HaxeProject::LibraryGlobalClass &library_class : HaxeProject::get_library_global_classes()) {
+		HaxeClassInfo info;
+		if (!library_index->get_type_info(library_class.fq_name, info) || !info.valid) {
+			continue;
+		}
+		const String class_path = info.path.simplify_path();
+		for (const String &root : resolved_class_paths) {
+			if (class_path.begins_with(root.path_join(""))) {
+				library_boot_classes.push_back(library_class.fq_name);
+				break;
+			}
+		}
+	}
+
+	String boot_source = HaxeBuild::generate_boot_class(script_classes, library_boot_classes);
 	String generated_dir = HaxeProject::get_generated_dir(p_release, p_editor, abi);
 	DirAccess::make_dir_recursive_absolute(generated_dir);
 	if (!write_if_changed(generated_dir.path_join("__HaxeGodotBoot.hx"), boot_source)) {
@@ -2232,7 +2485,7 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 
 	output_path = HaxeProject::get_output_library_path(p_release, p_editor, abi);
 	stamp_path = HaxeProject::get_config_dir(p_release, p_editor, abi).path_join(".stamp");
-	stamp = HaxeBuild::build_stamp(p_release, p_editor, abi);
+	stamp = HaxeBuild::build_stamp(p_release, p_editor, abi, options);
 	versioned_path = HaxeProject::get_versioned_library_path(p_release, p_editor, stamp, abi);
 	if (!p_force && !toolchain_changed && FileAccess::exists(output_path) && FileAccess::exists(versioned_path) && FileAccess::exists(stamp_path)) {
 		Ref<FileAccess> file = FileAccess::open(stamp_path, FileAccess::READ);
@@ -2246,7 +2499,7 @@ void HaxeBuildSession::prepare(bool p_release, bool p_editor, bool p_force) {
 		}
 	}
 
-	Vector<String> arguments_vector = HaxeBuild::collect_arguments(p_release, p_editor, libraries, script_classes, class_path_aliases, abi, ndk_root);
+	Vector<String> arguments_vector = HaxeBuild::collect_arguments(p_release, p_editor, libraries, script_classes, class_path_aliases, abi, ndk_root, options);
 	if (arguments_vector.is_empty()) {
 		result = HaxeBuild::Result::failed("Haxe support files are missing; cannot build.");
 		finished = true;

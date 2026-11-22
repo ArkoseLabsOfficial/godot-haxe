@@ -105,6 +105,33 @@ bool hxgodot_haxe_is_ref_counted(String p_object_id);
 bool hxgodot_haxe_update_texture(String p_texture_id, const void *p_pixels, int p_size, int p_width, int p_height, int p_format);
 int hxgodot_haxe_push_audio_frames(String p_playback_id, const void *p_samples, int p_frames, int p_channels);
 
+/* Streams a file through the engine's own FileAccess, so a decoder with its own
+ * I/O can read a packed res:// entry in an exported game. `file_open` returns a
+ * handle (0 when the file cannot be opened); `file_size`, `file_read` and
+ * `file_seek` use it, and `file_close` releases it. `file_read` writes into the
+ * caller's buffer and returns the number of bytes read. */
+int hxgodot_haxe_file_open(String p_path);
+int64_t hxgodot_haxe_file_size(int p_handle);
+int hxgodot_haxe_file_read(int p_handle, const void *p_out, int p_size);
+int hxgodot_haxe_file_seek(int p_handle, int64_t p_position);
+void hxgodot_haxe_file_close(int p_handle);
+
+/* Streaming audio. The engine owns the stream (a native `AudioStream` written
+ * from a decoder's own thread); Haxe holds only the small handle, so no
+ * generated binding has to name the engine-side class. `open` returns 0 on
+ * failure, `attach` points an AudioStreamPlayer (by object id) at it and
+ * `write` is called from the decoder's audio callback thread, so it does no
+ * main-thread bookkeeping. `buffered` reports the frames queued, `reset`
+ * discards the queue (a seek, or the start of a loop) and `stat` reports a
+ * running counter (0 dropped, 1 short mixes, 2 trimmed). */
+int hxgodot_haxe_audio_stream_open(double p_mix_rate, double p_buffer_len, double p_target_len);
+bool hxgodot_haxe_audio_stream_attach(int p_handle, String p_player_id);
+int hxgodot_haxe_audio_stream_write(int p_handle, const void *p_samples, int p_frames, int p_channels);
+int hxgodot_haxe_audio_stream_buffered(int p_handle);
+void hxgodot_haxe_audio_stream_reset(int p_handle);
+int hxgodot_haxe_audio_stream_stat(int p_handle, int p_which);
+void hxgodot_haxe_audio_stream_close(int p_handle);
+
 /* Haxe closures handed to the engine as Callable values. `attach_*` installs
  * the GC finalizer that releases the native resource when the Haxe wrapper
  * object dies. */

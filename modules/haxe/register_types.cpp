@@ -79,6 +79,12 @@ static void _haxe_editor_init() {
 
 void initialize_haxe_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SERVERS) {
+		// The host API marker is searched for in an export template
+		// (`HAXE_EXPORT.md` §3); passing it to `print_verbose()` is what keeps it
+		// in the binary in every build, since a string that is never read is
+		// dropped. Only printed with `--verbose`.
+		print_verbose("Haxe module host API marker: " HXGODOT_TEMPLATE_ABI_MARKER);
+
 		GDREGISTER_CLASS(HaxeScript);
 		GDREGISTER_CLASS(HaxeLanguage);
 

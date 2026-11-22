@@ -95,6 +95,94 @@ String strip_marker(const String &p_code, int &r_caret, int &r_line, int &r_colu
 	return text;
 }
 
+/* Reads the expression that ends at `p_delimiter`, the index of the `.` of a
+ * member access or the `(` of a call. A plain name is one segment; a chained
+ * member access is several (`foo.bar`), and a call keeps its argument list as
+ * the segment that produces its result (`get_parent()`, `Vector2(1, 2)`, so
+ * `get_parent().add_child` has two segments). Returns false when the text
+ * cannot be read as an expression, and reports where the expression starts
+ * through `r_start`. */
+bool scan_receiver(const String &p_text, int p_delimiter, Vector<String> &r_segments, int *r_start = nullptr) {
+	r_segments.clear();
+	int i = p_delimiter;
+	int guard = 0;
+	while (i > 0 && guard++ < 64) {
+		int j = i - 1;
+		while (j >= 0 && is_blank(p_text[j])) {
+			j--;
+		}
+		if (j < 0) {
+			break;
+		}
+		if (p_text[j] == ')') {
+			/* The expression is a call result (`get_parent()`,
+			 * `get_node("X")`). Capture the whole call expression as one
+			 * segment; `resolve_receiver` looks the called member's return type
+			 * up, so the members of the produced value complete. An expression
+			 * with no named callee (a parenthesized group such as `(a + b)`)
+			 * stays unknown. */
+			int open = j;
+			int paren_depth = 0;
+			bool matched = false;
+			while (open >= 0) {
+				if (p_text[open] == ')') {
+					paren_depth++;
+				} else if (p_text[open] == '(') {
+					paren_depth--;
+					if (paren_depth == 0) {
+						matched = true;
+						break;
+					}
+				}
+				open--;
+			}
+			if (!matched) {
+				r_segments.clear();
+				return false;
+			}
+			int callee_end = open - 1;
+			while (callee_end >= 0 && is_blank(p_text[callee_end])) {
+				callee_end--;
+			}
+			int callee_start = callee_end;
+			while (callee_start >= 0 && is_ident_char(p_text[callee_start])) {
+				callee_start--;
+			}
+			callee_start++;
+			if (callee_start > callee_end) {
+				r_segments.clear();
+				return false;
+			}
+			r_segments.insert(0, p_text.substr(callee_start, j - callee_start + 1));
+			i = callee_start;
+		} else {
+			if (!is_ident_char(p_text[j])) {
+				r_segments.clear();
+				return false;
+			}
+			int start = j;
+			while (start > 0 && is_ident_char(p_text[start - 1])) {
+				start--;
+			}
+			r_segments.insert(0, p_text.substr(start, j - start + 1));
+			i = start;
+		}
+		int k = i;
+		while (k > 0 && is_blank(p_text[k - 1])) {
+			k--;
+		}
+		if (k > 0 && p_text[k - 1] == '.') {
+			i = k - 1;
+			continue;
+		}
+		break;
+	}
+	if (r_start != nullptr) {
+		*r_start = i;
+	}
+	return !r_segments.is_empty();
+}
+
 bool analyze_code(const String &p_code, CompletionContext &r_context) {
 	if (p_code.is_empty()) {
 		return false;
@@ -151,88 +239,8 @@ bool analyze_code(const String &p_code, CompletionContext &r_context) {
 
 	if (end > 0 && head[end - 1] == '.') {
 		r_context.member_access = true;
-		int i = end - 1;
-		int guard = 0;
-		while (i > 0 && guard++ < 64) {
-			int j = i - 1;
-			while (j >= 0 && is_blank(head[j])) {
-				j--;
-			}
-			if (j < 0) {
-				break;
-			}
-			if (head[j] == ')') {
-				// The receiver is a call result (`get_parent()`,
-				// `get_node("X")`). Capture the whole call expression as one
-				// receiver segment; `resolve_receiver` looks the called
-				// member's return type up, so the members of the produced
-				// value complete. An expression with no named callee (a
-				// parenthesized group such as `(a + b)`) stays unknown.
-				int open = j;
-				int paren_depth = 0;
-				bool matched = false;
-				while (open >= 0) {
-					if (head[open] == ')') {
-						paren_depth++;
-					} else if (head[open] == '(') {
-						paren_depth--;
-						if (paren_depth == 0) {
-							matched = true;
-							break;
-						}
-					}
-					open--;
-				}
-				if (!matched) {
-					r_context.receiver.clear();
-					break;
-				}
-				int callee_end = open - 1;
-				while (callee_end >= 0 && is_blank(head[callee_end])) {
-					callee_end--;
-				}
-				int callee_start = callee_end;
-				while (callee_start >= 0 && is_ident_char(head[callee_start])) {
-					callee_start--;
-				}
-				callee_start++;
-				if (callee_start > callee_end) {
-					r_context.receiver.clear();
-					break;
-				}
-				r_context.receiver.insert(0, head.substr(callee_start, j - callee_start + 1));
-				i = callee_start;
-				int k = i;
-				while (k > 0 && is_blank(head[k - 1])) {
-					k--;
-				}
-				if (k > 0 && head[k - 1] == '.') {
-					i = k - 1;
-					continue;
-				}
-				break;
-			}
-			if (!is_ident_char(head[j])) {
-				r_context.receiver.clear();
-				break;
-			}
-			int start = j;
-			while (start > 0 && is_ident_char(head[start - 1])) {
-				start--;
-			}
-			r_context.receiver.insert(0, head.substr(start, j - start + 1));
-			i = start;
-			int k = i;
-			while (k > 0 && is_blank(head[k - 1])) {
-				k--;
-			}
-			if (k > 0 && head[k - 1] == '.') {
-				i = k - 1;
-				continue;
-			}
-			break;
-		}
-		if (r_context.receiver.is_empty()) {
+		if (!scan_receiver(head, end - 1, r_context.receiver)) {
+			r_context.receiver.clear();
 			r_context.member_access = false;
 		}
 	} else {
@@ -1452,6 +1460,289 @@ ScriptLanguage::LookupResultType lookup_kind(const String &p_kind) {
 	return ScriptLanguage::LOOKUP_RESULT_CLASS;
 }
 
+/* ---------------------------------------------------------- call hints -- */
+
+/* Replaces the contents of string literals and comments with spaces while
+ * keeping every character's position. The call hint scanner walks the text
+ * backwards, so a `(` or `,` inside a string or comment must not count. */
+String mask_literals(const String &p_text) {
+	String masked = p_text;
+	int length = masked.length();
+	int i = 0;
+	while (i < length) {
+		char32_t c = masked[i];
+		if (c == '"' || c == '\'') {
+			char32_t quote = c;
+			masked.set(i, ' ');
+			i++;
+			while (i < length) {
+				char32_t d = masked[i];
+				if (d == '\\') {
+					masked.set(i, ' ');
+					if (i + 1 < length) {
+						masked.set(i + 1, ' ');
+					}
+					i += 2;
+					continue;
+				}
+				masked.set(i, ' ');
+				i++;
+				if (d == quote) {
+					break;
+				}
+			}
+			continue;
+		}
+		if (c == '/' && i + 1 < length && masked[i + 1] == '/') {
+			while (i < length && masked[i] != '\n') {
+				masked.set(i, ' ');
+				i++;
+			}
+			continue;
+		}
+		if (c == '/' && i + 1 < length && masked[i + 1] == '*') {
+			masked.set(i, ' ');
+			masked.set(i + 1, ' ');
+			i += 2;
+			while (i < length) {
+				if (masked[i] == '*' && i + 1 < length && masked[i + 1] == '/') {
+					masked.set(i, ' ');
+					masked.set(i + 1, ' ');
+					i += 2;
+					break;
+				}
+				masked.set(i, ' ');
+				i++;
+			}
+			continue;
+		}
+		i++;
+	}
+	return masked;
+}
+
+/* The parameters of a function as a call hint needs them: the declared types,
+ * the declared names and which of them may be omitted, plus a trailing rest
+ * argument. */
+struct CallSignature {
+	String return_type;
+	Vector<String> arg_types;
+	Vector<String> arg_names;
+	Vector<bool> optional;
+	bool vararg = false;
+};
+
+/* Looks a function up on a resolved owner, following project scripts into the
+ * engine bindings, the way `resolve_member_type` follows them for a member's
+ * type. Fills `r_signature` and returns true when the member is a function. */
+bool resolve_member_function(const ResolvedType &p_owner, const String &p_member, CallSignature &r_signature) {
+	if (!p_owner.valid) {
+		return false;
+	}
+	if (p_owner.project || p_owner.bridge || p_owner.std || p_owner.library || p_owner.gdscript) {
+		HaxeClassInfo info;
+		bool found = false;
+		if (p_owner.project) {
+			found = HaxeProject::get_class_info_by_name(p_owner.name, info);
+		} else if (p_owner.bridge) {
+			found = find_bridge_class(p_owner.name, info);
+		} else if (p_owner.library) {
+			found = HaxeLibraryIndex::get_singleton()->get_type_info(p_owner.name, info);
+		} else if (p_owner.gdscript) {
+			found = HaxeGDScriptLibrary::get_singleton()->get_type_info(p_owner.name, info);
+		} else {
+			found = HaxeStdLibrary::get_singleton()->get_type_info(p_owner.name, info);
+		}
+		if (!found) {
+			return false;
+		}
+		const HaxeFunctionInfo *function = info.find_function(p_member);
+		if (function != nullptr) {
+			r_signature.return_type = function->return_type;
+			for (const HaxeArgumentInfo &argument : function->arguments) {
+				r_signature.arg_names.push_back(argument.name);
+				r_signature.arg_types.push_back(argument.type);
+				r_signature.optional.push_back(argument.optional);
+			}
+			return true;
+		}
+		if (!info.base.is_empty()) {
+			return resolve_member_function(classify_type(info.base), p_member, r_signature);
+		}
+		return false;
+	}
+	Dictionary member;
+	String owner;
+	if (!HaxeApiIndex::get_singleton()->find_member(p_owner.name, p_member, member, owner)) {
+		return false;
+	}
+	String kind = member.get("kind", String());
+	if (kind != "method" && kind != "static_method") {
+		return false;
+	}
+	r_signature.return_type = member.get("type", String());
+	r_signature.vararg = Variant(member.get("vararg", false)).operator bool();
+	Array args = member.get("args", Array());
+	/* Metadata without parameter names (an older api.json) still yields a
+	 * useful hint from the types alone. */
+	Array names = member.get("arg_names", Array());
+	for (int i = 0; i < args.size(); i++) {
+		r_signature.arg_types.push_back(args[i]);
+		r_signature.arg_names.push_back(i < names.size() ? String(names[i]) : String());
+		r_signature.optional.push_back(false);
+	}
+	return true;
+}
+
+/* Formats a hint the way `CodeEdit` expects: the return type, the name, the
+ * parameters, and 0xFFFF around the parameter the caret is on (the same marker
+ * GDScript uses). */
+void build_call_hint(const String &p_name, const CallSignature &p_signature, int p_argument, String &r_hint) {
+	String hint;
+	if (!p_signature.return_type.is_empty()) {
+		hint += p_signature.return_type + " ";
+	}
+	hint += p_name + "(";
+	for (int i = 0; i < p_signature.arg_types.size(); i++) {
+		if (i > 0) {
+			hint += ", ";
+		}
+		if (i == p_argument) {
+			hint += String::chr(CARET_MARKER);
+		}
+		String argument = p_signature.arg_types[i];
+		if (i < p_signature.arg_names.size() && !p_signature.arg_names[i].is_empty()) {
+			String name = p_signature.arg_names[i];
+			if (i < p_signature.optional.size() && p_signature.optional[i]) {
+				name = "?" + name;
+			}
+			argument = name + ": " + argument;
+		}
+		hint += argument;
+		if (i == p_argument) {
+			hint += String::chr(CARET_MARKER);
+		}
+	}
+	if (p_signature.vararg) {
+		if (!p_signature.arg_types.is_empty()) {
+			hint += ", ";
+		}
+		if (p_argument >= p_signature.arg_types.size()) {
+			hint += String::chr(CARET_MARKER);
+		}
+		hint += "...args: Array";
+		if (p_argument >= p_signature.arg_types.size()) {
+			hint += String::chr(CARET_MARKER);
+		}
+	}
+	hint += ")";
+	r_hint = hint;
+}
+
+/* Produces a call hint when the caret sits inside a call's argument list. The
+ * callee is read from the text before the `(`, the function is looked up on its
+ * receiver, and the argument under the caret is the number of top-level commas
+ * before it. Returns false when the caret is not inside a resolvable call. */
+bool haxe_call_hint(const String &p_code, const String &p_path, String &r_hint) {
+	int caret = 0;
+	int line = 0;
+	int column = 0;
+	String text = strip_marker(p_code, caret, line, column);
+	String masked = mask_literals(text);
+
+	/* The innermost unclosed `(` before the caret. A `[` or `{` closer to the
+	 * caret means the caret is in an array or block literal, which has no
+	 * argument list to hint at. */
+	int open = -1;
+	int depth = 0;
+	for (int i = caret - 1; i >= 0; i--) {
+		char32_t c = masked[i];
+		if (c == ')' || c == ']' || c == '}') {
+			depth++;
+		} else if (c == '(') {
+			if (depth == 0) {
+				open = i;
+				break;
+			}
+			depth--;
+		} else if (c == '[' || c == '{') {
+			if (depth == 0) {
+				return false;
+			}
+			depth--;
+		}
+	}
+	if (open < 0) {
+		return false;
+	}
+
+	Vector<String> chain;
+	int chain_start = 0;
+	if (!scan_receiver(masked, open, chain, &chain_start)) {
+		return false;
+	}
+
+	/* `function foo(` declares a function; its parameter list is not a call. */
+	int word_end = chain_start;
+	while (word_end > 0 && is_blank(masked[word_end - 1])) {
+		word_end--;
+	}
+	int word_start = word_end;
+	while (word_start > 0 && is_ident_char(masked[word_start - 1])) {
+		word_start--;
+	}
+	if (masked.substr(word_start, word_end - word_start) == "function") {
+		return false;
+	}
+
+	int argument = 0;
+	int bracket = 0;
+	for (int i = open + 1; i < caret; i++) {
+		char32_t c = masked[i];
+		if (c == '(' || c == '[' || c == '{') {
+			bracket++;
+		} else if (c == ')' || c == ']' || c == '}') {
+			bracket--;
+		} else if (c == ',' && bracket == 0) {
+			argument++;
+		}
+	}
+
+	String callee = chain[chain.size() - 1];
+	CallSignature signature;
+	bool found = false;
+	if (chain.size() >= 2) {
+		/* An explicit receiver (`self.play(`): the segments before the callee
+		 * resolve to the type the call is a member of. */
+		CompletionContext receiver_context;
+		receiver_context.text = text;
+		receiver_context.receiver.resize(chain.size() - 1);
+		for (int i = 0; i + 1 < chain.size(); i++) {
+			receiver_context.receiver.set(i, chain[i]);
+		}
+		HashMap<String, String> locals;
+		bool is_static = false;
+		ResolvedType owner = resolve_receiver(receiver_context, p_path, locals, is_static);
+		found = resolve_member_function(owner, callee, signature);
+	} else if (!p_path.is_empty()) {
+		/* A bare name is an implicit-`this` member of the edited class, which
+		 * reaches the engine methods through the base chain as well. */
+		HaxeClassInfo script_info;
+		if (HaxeProject::get_class_info(p_path, script_info) && script_info.valid) {
+			ResolvedType owner;
+			owner.name = script_info.fq_name.is_empty() ? script_info.name : script_info.fq_name;
+			owner.project = true;
+			owner.valid = true;
+			found = resolve_member_function(owner, callee, signature);
+		}
+	}
+	if (!found) {
+		return false;
+	}
+	build_call_hint(callee, signature, argument, r_hint);
+	return true;
+}
+
 } // namespace
 
 String haxe_resolve_member_type(const Vector<String> &p_path, const String &p_script_path) {
@@ -1486,6 +1777,14 @@ Error haxe_complete_code(const String &p_code, const String &p_path, Object *p_o
 	CompletionContext context;
 	if (!analyze_code(p_code, context)) {
 		return ERR_UNAVAILABLE;
+	}
+
+	/* A call hint is independent of the completion list: the caret may be
+	 * inside an argument list, where neither member access nor a prefix
+	 * applies. */
+	String call_hint;
+	if (haxe_call_hint(p_code, p_path, call_hint)) {
+		r_call_hint = call_hint;
 	}
 
 	if (context.metadata_position) {

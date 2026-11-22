@@ -77,7 +77,24 @@ public:
 	 * Exposed for the engine tests. */
 	static int web_template_threads(const String &p_path);
 
+	/* Whether the template at `p_path` carries this build's host API marker
+	 * (`HXGODOT_TEMPLATE_ABI_MARKER`). A game refuses a library built for a
+	 * different host API version, so an export whose template disagrees is
+	 * refused before it is written. Exposed for the engine tests. */
+	static bool template_host_abi_matches(const String &p_path);
+
+	/* Whether the template carries any host API marker at all. False for a Haxe
+	 * template built before the marker existed, which cannot be classified and
+	 * only warns. Exposed for the engine tests. */
+	static bool template_declares_host_abi(const String &p_path);
+
 	virtual void _export_begin(const HashSet<String> &p_features, bool p_debug, const String &p_path, int p_flags) override;
 	virtual void _export_file(const String &p_path, const String &p_type, const HashSet<String> &p_features) override;
 	virtual void _export_end() override;
+
+	/* The export dialog's "Haxe" section. The project settings are the
+	 * baseline; these let one preset differ (for example a release preset with
+	 * `-dce std` and an extra `-D RELEASE`) without editing the project. */
+	virtual void _get_export_options(const Ref<EditorExportPlatform> &p_export_platform, List<EditorExportPlatform::ExportOption> *r_options) const override;
+	virtual String _get_export_option_warning(const Ref<EditorExportPlatform> &p_export_platform, const String &p_option_name) const override;
 };

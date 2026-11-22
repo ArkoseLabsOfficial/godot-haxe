@@ -118,6 +118,33 @@ public:
 		bool declared = false;
 	};
 
+	/* Compiler configuration a caller can override on top of the project
+	 * settings.
+	 *
+	 * The project settings (`haxe/compiler/dce`, `haxe/compiler/defines`,
+	 * `haxe/compiler/extra_arguments`) are the baseline for every build, the
+	 * editor's included. An export preset layers its own values on top, so a
+	 * shipped game can differ from the editor build (stricter dead-code
+	 * elimination, a `-D RELEASE` define) without editing the project. An
+	 * empty `dce` means "use the project setting".
+	 *
+	 * `defines` and `arguments` are *added* to the project's; `dce` replaces
+	 * it. There is deliberately no include path here: a preset that added a
+	 * class path would make the exported library differ from the one the
+	 * editor resolved its completions against. */
+	struct Options {
+		String dce;
+		Vector<String> defines;
+		Vector<String> arguments;
+
+		/* The effective configuration: every empty field filled from the
+		 * project settings. The build and its stamp both use this, so they
+		 * cannot disagree about what is being compiled. */
+		Options resolved() const;
+		/* True when nothing would differ from the project default. */
+		bool is_default() const;
+	};
+
 	/* Resolves project dependencies. Missing or conflicting libraries produce
 	 * a message that names the exact haxelib command needed to fix it. */
 	static Error resolve_dependencies(Vector<Library> &r_libraries, String &r_error);
@@ -132,8 +159,9 @@ public:
 	 * `p_editor` selects the editor library, which additionally contains
 	 * @:tool classes. A non-empty `p_abi` cross-compiles for that Android ABI
 	 * instead of the host; `p_ndk_root` is the NDK hxcpp should use (it is
-	 * ignored for a host build). */
-	static Result build(bool p_release, bool p_editor, bool p_force = false, const String &p_abi = String(), const String &p_ndk_root = String());
+	 * ignored for a host build). `p_options` overrides the project's compiler
+	 * configuration for this build (an export preset's options). */
+	static Result build(bool p_release, bool p_editor, bool p_force = false, const String &p_abi = String(), const String &p_ndk_root = String(), const Options &p_options = Options());
 
 	/* Compiler arguments used for editor tooling (`haxe --display`): the same
 	 * class paths and defines as a real build, without the output target. */
@@ -226,7 +254,13 @@ public:
 	 * replaced by a space-free alias; the alias -> real mapping is appended to
 	 * `r_class_path_aliases` so diagnostics can be translated back. Exposed so
 	 * the class-path aliasing can be tested without spawning a compiler. */
-	static Vector<String> collect_arguments(bool p_release, bool p_editor, const Vector<Library> &p_libraries, const Vector<HaxeClassInfo> &p_script_classes, Vector<Pair<String, String>> &r_class_path_aliases, const String &p_abi = String(), const String &p_ndk_root = String());
+	static Vector<String> collect_arguments(bool p_release, bool p_editor, const Vector<Library> &p_libraries, const Vector<HaxeClassInfo> &p_script_classes, Vector<Pair<String, String>> &r_class_path_aliases, const String &p_abi = String(), const String &p_ndk_root = String(), const Options &p_options = Options());
+
+	/* The compiler tokens a resolved `Options` contributes: `-dce <mode>`, one
+	 * `-D <name>` per define and the raw extra arguments. Exposed so the
+	 * ordering and the "project setting vs preset override" split can be
+	 * tested without spawning a compiler. */
+	static Vector<String> options_arguments(const Options &p_options);
 
 	/* haxelib repository used while compiling. The project-local repository is
 	 * used when it contains hxcpp; otherwise the machine wide repository that
@@ -234,12 +268,12 @@ public:
 	static String get_compile_haxelib_path();
 
 	/* Returns true when a build is needed for the current sources. */
-	static bool is_build_required(bool p_release, bool p_editor, const String &p_abi = String());
+	static bool is_build_required(bool p_release, bool p_editor, const String &p_abi = String(), const Options &p_options = Options());
 
 	/* Deterministic stamp of the current build inputs. Used to version the
 	 * produced shared library so a rebuild never overwrites a library the
 	 * process has already loaded. */
-	static String current_stamp(bool p_release, bool p_editor, const String &p_abi = String());
+	static String current_stamp(bool p_release, bool p_editor, const String &p_abi = String(), const Options &p_options = Options());
 
 	/* A content signature for a library install that can be edited in place.
 	 *
@@ -326,6 +360,13 @@ public:
 	 * split at the first space like an hxml line. */
 	static Vector<String> normalize_extra_arguments(const Vector<String> &p_arguments);
 
+	/* The inverse of `parse_extra_params`: writes an argument list as the text
+	 * of an `.hxml` file the compiler reads back as the same list. The Windows
+	 * build writes its options to such a file because the process API cannot
+	 * pass an argument that contains a double quote (see
+	 * `resolve_haxe_command`). */
+	static String serialize_hxml_arguments(const List<String> &p_arguments);
+
 	/* The compiler diagnostics of a failed build, one per line (`path:line:
 	 * message`). `Result::message` only carries a count for a compile failure,
 	 * so a caller that cannot show the parsed errors (an exported game's
@@ -338,13 +379,28 @@ public:
 	/* The generated `__HaxeGodotBoot` module: it references every project
 	 * class so hxcpp keeps them, and rebinds `haxe.Log.trace` so `trace()`
 	 * reaches the engine log. Public so the tests can check the generated
-	 * source without running a compiler. */
-	static String generate_boot_class(const Vector<HaxeClassInfo> &p_classes);
+	 * source without running a compiler.
+	 *
+	 * `p_library_classes` are the fully qualified names of the `@:globalClass`
+	 * library classes that reach a Godot type. A scene can attach one without
+	 * any project code naming it, and hxcpp's `-dce full` removes a type that
+	 * only `--macro addGlobalMetadata(..., '@:keep', ...)` marks: the metadata
+	 * is applied while the type is *typed*, and an unreferenced type is never
+	 * typed. Referencing the class here forces it into the compilation, and the
+	 * metadata (emitted by `collect_arguments()`) then keeps it. */
+	static String generate_boot_class(const Vector<HaxeClassInfo> &p_classes, const Vector<String> &p_library_classes = Vector<String>());
+
+	/* The host API version the toolchain header in `p_toolchain_dir` declares, or
+	 * -1 when it cannot be read. `build()` refuses to compile against a
+	 * toolchain whose version differs from the engine's, because the game would
+	 * reject the resulting library ("incompatible host API version"). Public so
+	 * a test can check the parse. */
+	static int read_toolchain_abi_version(const String &p_toolchain_dir);
 
 private:
 	friend class HaxeBuildSession;
 
-	static String build_stamp(bool p_release, bool p_editor, const String &p_abi);
+	static String build_stamp(bool p_release, bool p_editor, const String &p_abi, const Options &p_options = Options());
 	static void parse_diagnostics(const String &p_output, const Vector<Pair<String, String>> &p_class_path_aliases, Result &r_result);
 	static String read_library_version(const String &p_library_dir, const String &p_requested);
 };
@@ -371,6 +427,10 @@ class HaxeBuildSession {
 	String versioned_path;
 	String abi;
 	String ndk_root;
+	/* Resolved compiler configuration for this build, captured by `start()`
+	 * so `prepare()` and the stamp agree (and so a preset value cannot change
+	 * under a running build). */
+	HaxeBuild::Options options;
 	/* Set for a web build: the `emcc` that was resolved and its identity. The
 	 * identity is recorded next to the hxcpp working directory so a build made
 	 * by another toolchain is never reused. */
@@ -395,7 +455,7 @@ public:
 
 	/* Prepares and starts the build. `is_running()` is false when it is
 	 * already finished, in which case `get_result()` is final. */
-	void start(bool p_release, bool p_editor, bool p_force = false, const String &p_abi = String(), const String &p_ndk_root = String());
+	void start(bool p_release, bool p_editor, bool p_force = false, const String &p_abi = String(), const String &p_ndk_root = String(), const HaxeBuild::Options &p_options = HaxeBuild::Options());
 	/* Reads the compiler output and, once it exited, post-processes it.
 	 * Returns true while the build is still running. */
 	bool poll();

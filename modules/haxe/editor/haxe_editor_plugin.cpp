@@ -176,6 +176,20 @@ HaxeEditorPlugin::HaxeEditorPlugin() {
 }
 
 HaxeEditorPlugin::~HaxeEditorPlugin() {
+	// The controls were detached from their containers in
+	// NOTIFICATION_EXIT_TREE, which leaves them without a parent: an orphaned
+	// Control is never freed by the scene tree, so the plugin has to delete
+	// them. Otherwise the panel, its widgets, and the editor theme resources
+	// they reference stay alive and Godot reports hundreds of leaked objects
+	// on shutdown (which the sanitizer and Mono CI jobs treat as a failure).
+	if (panel != nullptr) {
+		memdelete(panel);
+		panel = nullptr;
+	}
+	if (libraries_panel != nullptr) {
+		memdelete(libraries_panel);
+		libraries_panel = nullptr;
+	}
 }
 
 String HaxeEditorPlugin::get_plugin_name() const {

@@ -48,6 +48,18 @@ HaxeLibraryIndex *HaxeLibraryIndex::get_singleton() {
 void HaxeLibraryIndex::index() {
 	indexed = true;
 
+	// An exported game has no usable project directory to scan: the `haxelib/`
+	// copies are shipped as empty `.hx` stubs and `globalize_path("res://")` is
+	// not a real path inside a pack, so the on-disk scan below could only walk
+	// `/haxelib` and log failures. Every library class a game can resolve -- a
+	// `@:globalClass` offered as a script, or the base of a project class -- is
+	// already described by the packaged script metadata
+	// (`res://haxe/scripts.json`), which is the game's index. Leaving this one
+	// empty keeps the runtime lookups off the filesystem entirely.
+	if (HaxeProject::uses_packaged_metadata()) {
+		return;
+	}
+
 	Vector<HaxeBuild::Library> libraries;
 	// What is on disk is the source of truth, exactly as for the Haxelib
 	// manager: a library that is installed but not (yet) written to haxe.json
