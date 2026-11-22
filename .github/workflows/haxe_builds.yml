@@ -13,6 +13,17 @@ env:
   # target; both live in the machine wide haxelib repository, which the module
   # treats as a shared toolchain rather than a project dependency.
   HAXE_VERSION: 4.3.7
+  # The newest hxcpp release on haxelib (4.3.2) is too old for two targets the
+  # workflows build. Android: it predates the NDK layout this engine pins
+  # (`platform/android/detect.py`) — it looks for
+  # `toolchains/<triple>-<version>/prebuilt`, defaults `ANDROID_HOST` to the
+  # nonexistent `linux-x86`, and hardcodes a target API of 16 for the 32-bit
+  # ABIs, so the build invokes the host `clang++` and then fails to link against
+  # NDK r29's sysroot. Web: its Emscripten toolchain selects the JavaScript
+  # exception scheme, which the module refuses for a WebAssembly-exceptions
+  # template. The `export-web` and `export-android` jobs build this commit
+  # instead (`HAXE_EXPORT.md` §5, `HAXE_WEB.md` §4).
+  HXCPP_COMMIT: ee0457735ad763bf6acff9ce175238340eb64f4e
   # Emscripten version verified with this module. 4.0.0 breaks WebAssembly
   # dynamic linking (the Haxe game library is a side module) and 4.0.23 breaks
   # the threaded dlink template.
@@ -559,7 +570,16 @@ jobs:
       - name: Install hxcpp
         run: |
           haxelib setup ~/haxelib
-          haxelib install hxcpp --quiet
+          # The web target needs the `git` hxcpp (see HXCPP_COMMIT): the 4.3.2
+          # release selects Emscripten's JavaScript exception scheme, which the
+          # module refuses for a WebAssembly-exceptions template
+          # (HAXE_WEB.md §4). `haxelib git` checks out the repository but does
+          # not build it, so compile the command line tools into the library
+          # root.
+          haxelib git hxcpp https://github.com/HaxeFoundation/hxcpp "$HXCPP_COMMIT"
+          (cd ~/haxelib/hxcpp/git/tools/run && haxe compile.hxml)
+          (cd ~/haxelib/hxcpp/git/tools/hxcpp && haxe compile.hxml)
+          test -f ~/haxelib/hxcpp/git/hxcpp.n
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -692,7 +712,14 @@ jobs:
       - name: Install hxcpp
         run: |
           haxelib setup ~/haxelib
-          haxelib install hxcpp --quiet
+          # The Android toolchain has to understand NDK r29 (see HXCPP_COMMIT).
+          # `haxelib git` checks out the repository but does not build it, so
+          # compile the command line tools into the library root the way the
+          # project's own instructions do.
+          haxelib git hxcpp https://github.com/HaxeFoundation/hxcpp "$HXCPP_COMMIT"
+          (cd ~/haxelib/hxcpp/git/tools/run && haxe compile.hxml)
+          (cd ~/haxelib/hxcpp/git/tools/hxcpp && haxe compile.hxml)
+          test -f ~/haxelib/hxcpp/git/hxcpp.n
 
       - name: Set up Java 17
         uses: actions/setup-java@v5

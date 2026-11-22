@@ -203,6 +203,46 @@ String find_installed_template(const String &p_name) {
  * the Gradle build template, so the marker can be one archive level down. */
 bool path_contains_marker(const String &p_path, const char *p_needle, int p_depth = 0);
 
+/* Whether `p_bytes` starts with the magic number of a compiled binary: an ELF
+ * shared library or executable, a Mach-O image (thin or universal), an `ar`
+ * static library (the iOS template ships `libgodot.a`), a Windows PE image, or
+ * a WebAssembly module. The template archives name their engine library
+ * differently — `libgodot_android.so`, `godot.wasm`, the macOS bundle's
+ * extensionless executable, `libgodot.a` — so the entry is matched by content
+ * rather than by file name. */
+bool looks_like_binary(const uint8_t *p_bytes) {
+	// ELF.
+	if (p_bytes[0] == 0x7F && p_bytes[1] == 'E' && p_bytes[2] == 'L' && p_bytes[3] == 'F') {
+		return true;
+	}
+	// Mach-O thin (32/64-bit, both endiannesses) and universal ("fat").
+	if (p_bytes[0] == 0xFE && p_bytes[1] == 0xED && p_bytes[2] == 0xFA && (p_bytes[3] == 0xCE || p_bytes[3] == 0xCF)) {
+		return true;
+	}
+	if ((p_bytes[0] == 0xCE || p_bytes[0] == 0xCF) && p_bytes[1] == 0xFA && p_bytes[2] == 0xED && p_bytes[3] == 0xFE) {
+		return true;
+	}
+	if (p_bytes[0] == 0xCA && p_bytes[1] == 0xFE && p_bytes[2] == 0xBA && p_bytes[3] == 0xBE) {
+		return true;
+	}
+	if (p_bytes[0] == 0xBE && p_bytes[1] == 0xBA && p_bytes[2] == 0xFE && p_bytes[3] == 0xCA) {
+		return true;
+	}
+	// `ar` static library.
+	if (p_bytes[0] == '!' && p_bytes[1] == '<' && p_bytes[2] == 'a' && p_bytes[3] == 'r') {
+		return true;
+	}
+	// Windows PE.
+	if (p_bytes[0] == 'M' && p_bytes[1] == 'Z') {
+		return true;
+	}
+	// WebAssembly.
+	if (p_bytes[0] == 0x00 && p_bytes[1] == 'a' && p_bytes[2] == 's' && p_bytes[3] == 'm') {
+		return true;
+	}
+	return false;
+}
+
 /* Whether an APK/AAR/web template contains a native library or WebAssembly
  * module carrying `p_needle`. Godot's Android templates store their libraries
  * compressed (`useLegacyPackaging` is on for the minimum SDK Godot targets) and
@@ -230,20 +270,26 @@ bool archive_contains_marker(const String &p_path, const char *p_needle) {
 		if (godot_unzip_get_current_file_info(package, info, entry) != UNZ_OK) {
 			continue;
 		}
-		// Android libraries and the web engine side module.
-		if (!entry.ends_with(".so") && !entry.ends_with(".wasm")) {
-			continue;
-		}
 		if (unzOpenCurrentFile(package) != UNZ_OK) {
 			continue;
 		}
 		int carry = 0;
+		bool first_chunk = true;
 		while (true) {
 			const int read = unzReadCurrentFile(package, buffer.ptrw() + carry, chunk_size);
 			if (read <= 0) {
 				break;
 			}
 			const int total = carry + read;
+			if (first_chunk) {
+				first_chunk = false;
+				// Only a compiled binary can carry the marker; the archive
+				// also holds assets and text files that would otherwise be
+				// searched for nothing.
+				if (total < 4 || !looks_like_binary(buffer.ptr())) {
+					break;
+				}
+			}
 			for (int i = 0; i + needle_length <= total; i++) {
 				if (memcmp(buffer.ptr() + i, p_needle, needle_length) == 0) {
 					found = true;
@@ -262,9 +308,6 @@ bool archive_contains_marker(const String &p_path, const char *p_needle) {
 	return found;
 }
 
-/* Whether a zip archive has an entry with this exact name. A web template built
- * with `dlink_enabled=yes` carries the engine as a side module; without it the
- * page has no dynamic linker to load the Haxe module. */
 /* Reads one unsigned LEB128 integer, the encoding WebAssembly uses for counts,
  * lengths and indexes. `r_offset` is advanced past it; false means the bytes
  * ended early or the encoding is not a valid 64-bit integer. */
@@ -377,6 +420,9 @@ bool web_template_exports_symbol(const String &p_path, const String &p_symbol) {
 	return !checked || found;
 }
 
+/* Whether a zip archive has an entry with this exact name. A web template built
+ * with `dlink_enabled=yes` carries the engine as a side module; without it the
+ * page has no dynamic linker to load the Haxe module. */
 bool archive_has_entry(const String &p_path, const String &p_entry) {
 	Ref<FileAccess> io_fa;
 	zlib_filefunc_def io = zipio_create_io(&io_fa);

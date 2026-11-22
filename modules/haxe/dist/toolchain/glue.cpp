@@ -2031,8 +2031,7 @@ extern "C" HXGODOT_EXPORT int hxgodot_create(int64_t p_object_id, const char *p_
 			int64_t previous_id;
 			void *previous_class;
 			bool previous_creating;
-			CreationFlag(int64_t p_id, void *p_class)
-					: previous_id(t_script_object_id), previous_class(t_script_class), previous_creating(t_creating_script_instance) {
+			CreationFlag(int64_t p_id, void *p_class) : previous_id(t_script_object_id), previous_class(t_script_class), previous_creating(t_creating_script_instance) {
 				t_script_object_id = p_id;
 				t_script_class = p_class;
 				t_creating_script_instance = true;

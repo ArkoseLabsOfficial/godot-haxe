@@ -266,7 +266,7 @@ typedef struct HxHostApi {
 
 	/* Uploads raw pixel data into an ImageTexture. The library passes a
 	 * pointer to its own buffer instead of a Haxe `PackedByteArray`, so a
-	 * multi megabyte frame does not have to be marshalled element by element
+	 * multi megabyte frame does not have to be marshaled element by element
 	 * (plus a Haxe `Array<Dynamic>` allocation) before every display. The host
 	 * copies `p_size` bytes and validates them against the format. `p_format`
 	 * is a Godot Image::Format. Returns 0 on success, 1 when the object is not

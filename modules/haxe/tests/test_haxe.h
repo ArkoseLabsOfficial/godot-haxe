@@ -1798,6 +1798,7 @@ TEST_CASE("[Modules][Haxe] an export preset's compiler options join the build ar
 	settings->set(HaxeProject::SETTING_DCE, previous_dce);
 }
 
+#ifdef TOOLS_ENABLED
 TEST_CASE("[Editor][Modules][Haxe] the export preset exposes the Haxe compiler options") {
 	// An ordinary Godot project must not grow a Haxe section in its export
 	// dialog. A project with a Haxe script class does, and the three options
@@ -1855,6 +1856,7 @@ TEST_CASE("[Editor][Modules][Haxe] the export preset exposes the Haxe compiler o
 	remove_scratch_dir(dir);
 	remove_scratch_dir(libs);
 }
+#endif
 
 TEST_CASE("[Modules][Haxe] build errors are formatted with the file and position") {
 	HaxeBuild::Result result;
@@ -2763,11 +2765,19 @@ static String write_zip_entry(const String &p_dir, const String &p_name, const S
 
 TEST_CASE("[Editor][Modules][Haxe] Android templates are searched through their archives") {
 	const String dir = make_scratch_dir();
+	// Only a compiled binary is searched, so every payload starts with a magic
+	// number: an ELF library, a Windows PE image. The macOS bundle's engine
+	// executable has no extension at all, which is why the entry is matched by
+	// content instead of by file name.
+	const String elf = String::chr(0x7f) + "ELF";
+	const String pe = "MZ";
 	const String filler = String("x").repeat(40000);
-	const String payload = filler + "HaxeScript" + filler;
+	const String payload = elf + filler + "HaxeScript" + filler;
 	const String haxe_apk = write_zip_entry(dir, "haxe.apk", "lib/arm64-v8a/libGodotAndroid.so", payload);
-	const String stock_apk = write_zip_entry(dir, "stock.apk", "lib/arm64-v8a/libGodotAndroid.so", filler + filler);
+	const String stock_apk = write_zip_entry(dir, "stock.apk", "lib/arm64-v8a/libGodotAndroid.so", elf + filler);
 	const String haxe_aar = write_zip_entry(dir, "haxe.aar", "jni/arm64-v8a/libGodotAndroid.so", payload);
+	const String haxe_macos = write_zip_entry(dir, "haxe_macos.zip", "macos_template.app/Contents/MacOS/macos_template", elf + filler + "HaxeScript");
+	const String haxe_windows = write_zip_entry(dir, "haxe_windows.zip", "godot.windows.template_release.x86_64.exe", pe + filler + "HaxeScript");
 	const String host_binary = write_source(dir, "godot.linuxbsd.template_release.x86_64", "ELF payload HaxeScript\n");
 	const String empty_binary = write_source(dir, "godot.stock", "ELF payload without the module\n");
 	REQUIRE_FALSE(haxe_apk.is_empty());
@@ -2790,6 +2800,13 @@ TEST_CASE("[Editor][Modules][Haxe] Android templates are searched through their 
 	CHECK(HaxeExportPlugin::template_contains_haxe(haxe_apk));
 	CHECK(HaxeExportPlugin::template_contains_haxe(haxe_aar));
 	CHECK_FALSE(HaxeExportPlugin::template_contains_haxe(stock_apk));
+	// A macOS template is a zip whose executable has no extension, and a
+	// Windows template's binary is a PE image.
+	CHECK(HaxeExportPlugin::template_contains_haxe(haxe_macos));
+	CHECK(HaxeExportPlugin::template_contains_haxe(haxe_windows));
+	// An entry that is not a binary is not searched, so an asset that happens
+	// to contain the marker name does not pass as a template.
+	CHECK_FALSE(HaxeExportPlugin::template_contains_haxe(write_zip_entry(dir, "assets.zip", "icon.svg", "HaxeScript")));
 	// The host templates are plain executables, not archives.
 	CHECK(HaxeExportPlugin::template_contains_haxe(host_binary));
 	CHECK_FALSE(HaxeExportPlugin::template_contains_haxe(empty_binary));
@@ -3103,7 +3120,7 @@ TEST_CASE("[Modules][Haxe] an exported game does not scan the on-disk library in
 		CHECK_FALSE(libraries->has_type("mylib.Widget"));
 	}
 
-	// Leaving the scope restores the editor behaviour.
+	// Leaving the scope restores the editor behavior.
 	libraries->invalidate();
 	REQUIRE(libraries->ensure_indexed());
 	CHECK(libraries->has_type("mylib.Widget"));
@@ -3371,15 +3388,15 @@ TEST_CASE("[Modules][Haxe] completion and lookup see a GDScript global class") {
 	CHECK(types.has("Hud"));
 
 	// The class name offers its static members only.
-	const HashSet<String> statics = completion_names(
+	const HashSet<String> static_members = completion_names(
 			"class Main {\n"
 			"\tfunction f() {\n"
 			"\t\tHud." +
 			mark + "\n"
 				   "\t}\n"
 				   "}\n");
-	CHECK(statics.has("create_hud"));
-	CHECK_FALSE(statics.has("refresh"));
+	CHECK(static_members.has("create_hud"));
+	CHECK_FALSE(static_members.has("refresh"));
 
 	// A value typed with the class offers the instance members, including the
 	// engine ones inherited from the native base.

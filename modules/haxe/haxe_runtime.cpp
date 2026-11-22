@@ -1109,7 +1109,7 @@ int HaxeRuntime::host_push_audio_frames(int64_t p_playback, const void *p_sample
 	PackedVector2Array frames;
 	frames.resize(p_frames);
 	for (int i = 0; i < p_frames; i++) {
-		// Interleaved signed 16 bit, normalised to [-1, 1]; a mono source is
+		// Interleaved signed 16 bit, normalized to [-1, 1]; a mono source is
 		// duplicated into both channels.
 		const int16_t left = samples[i * p_channels];
 		const int16_t right = p_channels > 1 ? samples[i * p_channels + 1] : left;

@@ -98,7 +98,7 @@ bool hxgodot_haxe_is_valid(String p_object_id);
 String hxgodot_haxe_class_name(String p_object_id);
 bool hxgodot_haxe_is_ref_counted(String p_object_id);
 
-/* Fast pixel and audio uploads that take a raw pointer instead of marshalling
+/* Fast pixel and audio uploads that take a raw pointer instead of marshaling
  * a packed array. Used by libraries that decode media on their own threads.
  * The pointer is the byte buffer `cpp.NativeArray.getBase()` returns (a
  * `char *`), so the parameter is `const void *` and no cast is needed there. */

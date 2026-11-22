@@ -1079,7 +1079,12 @@ class Generator:
         # the value is; the engine call still passes the path alone.
         generic_parameter = None
         constraint = return_type[len("godot.") :]
-        if name in TYPED_ACCESSORS and not is_static and return_type.startswith("godot.") and constraint in self.class_names:
+        if (
+            name in TYPED_ACCESSORS
+            and not is_static
+            and return_type.startswith("godot.")
+            and constraint in self.class_names
+        ):
             generic_parameter = constraint
             declarations.append("?__type:Class<T>")
         if method.get("is_vararg"):
@@ -1184,9 +1189,7 @@ class Generator:
         owns_value = name in PRIMARY_MEMBERS
         if is_builtin:
             out.append("@:keep")
-            out.append(
-                "class %s%s {" % (name, " implements hxgodot.ValueOwner" if owns_value else "")
-            )
+            out.append("class %s%s {" % (name, " implements hxgodot.ValueOwner" if owns_value else ""))
         elif base:
             out.append("@:keep")
             out.append("class %s extends godot.%s {" % (name, base))
@@ -1234,7 +1237,7 @@ class Generator:
             out.append("\t/* Set when this value was read from an object property")
             out.append("\t * (`node.position`). Component writes then store the whole value back. */")
             out.append("\tvar __hxowner:hxgodot.ValueOwner = null;")
-            out.append('\tvar __hxproperty:String = null;')
+            out.append("\tvar __hxproperty:String = null;")
             out.append("")
             out.append(
                 "\t@:noCompletion public function __hxbindValue(owner:hxgodot.ValueOwner, property:String):godot.%s {"
@@ -1258,9 +1261,7 @@ class Generator:
             for member in PRIMARY_MEMBERS.get(name, []):
                 member_type = MEMBER_TYPES.get(name, {}).get(member, "Float")
                 if member_type.startswith("godot."):
-                    out.append(
-                        "\t\tcopy.__%s = __%s == null ? null : __%s.__hxcopy();" % (member, member, member)
-                    )
+                    out.append("\t\tcopy.__%s = __%s == null ? null : __%s.__hxcopy();" % (member, member, member))
                 else:
                     out.append("\t\tcopy.__%s = __%s;" % (member, member))
             out.append("\t\treturn copy;")
@@ -1413,8 +1414,7 @@ class Generator:
             # A nested value is copied as well, so a caller that keeps it does
             # not mutate this value behind its back.
             lines.append(
-                '\t\treturn __%s == null ? null : __%s.__hxcopy().__hxbindValue(this, "%s");'
-                % (name, name, member)
+                '\t\treturn __%s == null ? null : __%s.__hxcopy().__hxbindValue(this, "%s");' % (name, name, member)
             )
         else:
             lines.append("\t\treturn __%s;" % name)
@@ -1464,12 +1464,9 @@ class Generator:
             )
             if bound:
                 lines.append(
-                    '\t\tvar __value:%s = cast Native.call(__hxgodotId, "%s", %s);'
-                    % (type_name, getter, arguments)
+                    '\t\tvar __value:%s = cast Native.call(__hxgodotId, "%s", %s);' % (type_name, getter, arguments)
                 )
-                lines.append(
-                    '\t\treturn __value == null ? null : __value.__hxbindValue(this, "%s");' % prop["name"]
-                )
+                lines.append('\t\treturn __value == null ? null : __value.__hxbindValue(this, "%s");' % prop["name"])
             else:
                 lines.append('\t\treturn cast Native.call(__hxgodotId, "%s", %s);' % (getter, arguments))
             lines.append("\t}")
@@ -1779,6 +1776,7 @@ def main():
     os.makedirs(bindings_dir, exist_ok=True)
     with open(os.path.join(bindings_dir, "api.json"), "w", encoding="utf-8") as handle:
         json.dump(generator.api_index(), handle, separators=(",", ":"), sort_keys=True)
+        handle.write("\n")
     print("Generated %d classes in %s" % (len(generated), options.out))
     if dropped_methods:
         print(

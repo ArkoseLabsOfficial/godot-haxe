@@ -1,6 +1,6 @@
 /**************************************************************************/
 /*  haxe_audio_stream.cpp                                                 */
-/*                                                                        */
+/**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
 /*                        https://godotengine.org                         */
@@ -16,7 +16,7 @@
 /* permit persons to whom the Software is furnished to do so, subject to  */
 /* the following conditions:                                              */
 /*                                                                        */
-/* The above copyright notice and this permission notice shall be        */
+/* The above copyright notice and this permission notice shall be         */
 /* included in all copies or substantial portions of the Software.        */
 /*                                                                        */
 /* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
@@ -110,7 +110,7 @@ int HaxeAudioStream::write_frames(const int16_t *p_samples, int p_frames, int p_
 	AudioFrame *dst = ring.ptrw();
 
 	for (int i = 0; i < take; i++) {
-		// Interleaved signed 16 bit, normalised to [-1, 1]; a mono source is
+		// Interleaved signed 16 bit, normalized to [-1, 1]; a mono source is
 		// duplicated into both channels.
 		const int16_t left = p_samples[(size_t)i * p_channels];
 		const int16_t right = p_channels > 1 ? p_samples[(size_t)i * p_channels + 1] : left;
